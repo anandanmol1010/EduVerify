@@ -66,12 +66,14 @@ router.post('/oauth/init', protect, async (req, res) => {
       expiresAt,
     });
 
-    // Provide sample demo phone numbers for user assistance
+    // Provide sample demo phone numbers for user assistance (1-to-1 account mapping)
     const demoMobiles = [
-      { mobile: '0000000001', note: 'Aarav Sharma & Priya Venkatesh (CBSE, High Merit)' },
-      { mobile: '0000000002', note: 'Rohan Banerjee & Ananya Deshmukh (ISC / State Board)' },
-      { mobile: '0000000003', note: 'Vikramaditya Rao (No DigiLocker ID) & Meera Kulkarni' },
-      { mobile: '0000000004', note: 'Harshvardhan Singh & Nisha Agarwal' },
+      { mobile: '0000000001', note: 'Aarav Sharma (CBSE 2024, 92.4% - All Documents)' },
+      { mobile: '0000000002', note: 'Priya Venkatesh (CBSE 2024, 96.2% - High Merit)' },
+      { mobile: '0000000003', note: 'Rohan Banerjee (ISC 2024, 88.0% - All Documents)' },
+      { mobile: '0000000004', note: 'Ananya Deshmukh (MSB 2023, 76.5% - State Board)' },
+      { mobile: '0000000005', note: 'Vikramaditya Rao (CBSE 2024, 84.6% - Academic Only)' },
+      { mobile: '0000000006', note: 'Meera Kulkarni (KRN 2024, 91.2% - State Board)' },
     ];
 
     // Fetch demo accounts list for backward compatibility
@@ -150,7 +152,7 @@ router.post('/oauth/mobile-login', protect, async (req, res) => {
     if (!accounts || accounts.length === 0) {
       return res.status(404).json({
         success: false,
-        message: `No fictional demo accounts found for mobile identifier '${cleanedMobile}'. Please use one of the available demo identifiers: 0000000001, 0000000002, 0000000003, or 0000000004.`,
+        message: `No fictional demo account found for mobile identifier '${cleanedMobile}'. Please use one of the available demo identifiers (e.g. 0000000001 to 0000000015).`,
       });
     }
 

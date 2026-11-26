@@ -59,7 +59,7 @@ export const mockCandidatesSeedData = [
   },
   {
     referenceId: 'DL-2024-CBSE-10922',
-    demoMobile: '0000000001',
+    demoMobile: '0000000002',
     fullName: 'Priya Venkatesh',
     dob: '2006-08-25',
     gender: 'Female',
@@ -100,7 +100,7 @@ export const mockCandidatesSeedData = [
   },
   {
     referenceId: 'DL-2024-ISC-20311',
-    demoMobile: '0000000001',
+    demoMobile: '0000000003',
     fullName: 'Rohan Banerjee',
     dob: '2005-11-14',
     gender: 'Male',
@@ -141,7 +141,7 @@ export const mockCandidatesSeedData = [
   },
   {
     referenceId: 'DL-2023-MAHA-30412',
-    demoMobile: '0000000001',
+    demoMobile: '0000000004',
     fullName: 'Ananya Deshmukh',
     dob: '2005-07-19',
     gender: 'Female',
@@ -182,7 +182,7 @@ export const mockCandidatesSeedData = [
   },
   {
     referenceId: 'DL-2024-CBSE-10925',
-    demoMobile: '0000000001',
+    demoMobile: '0000000005',
     fullName: 'Vikramaditya Rao',
     dob: '2006-01-30',
     gender: 'Male',
@@ -223,7 +223,7 @@ export const mockCandidatesSeedData = [
   },
   {
     referenceId: 'DL-2024-KRN-40112',
-    demoMobile: '0000000001',
+    demoMobile: '0000000006',
     fullName: 'Meera Kulkarni',
     dob: '2006-09-08',
     gender: 'Female',
@@ -264,7 +264,7 @@ export const mockCandidatesSeedData = [
   },
   {
     referenceId: 'DL-2024-UP-50219',
-    demoMobile: '0000000001',
+    demoMobile: '0000000007',
     fullName: 'Harshvardhan Singh',
     dob: '2005-03-21',
     gender: 'Male',
@@ -305,7 +305,7 @@ export const mockCandidatesSeedData = [
   },
   {
     referenceId: 'DL-2024-CBSE-10928',
-    demoMobile: '0000000001',
+    demoMobile: '0000000008',
     fullName: 'Nisha Agarwal',
     dob: '2006-06-15',
     gender: 'Female',
@@ -346,7 +346,7 @@ export const mockCandidatesSeedData = [
   },
   {
     referenceId: 'DL-2023-ISC-20315',
-    demoMobile: '0000000001',
+    demoMobile: '0000000009',
     fullName: 'Devansh Kapur',
     dob: '2005-12-04',
     gender: 'Male',
@@ -387,7 +387,7 @@ export const mockCandidatesSeedData = [
   },
   {
     referenceId: 'DL-2024-MAHA-30419',
-    demoMobile: '0000000001',
+    demoMobile: '0000000010',
     fullName: 'Tanvi Shinde',
     dob: '2006-02-18',
     gender: 'Female',
@@ -428,7 +428,7 @@ export const mockCandidatesSeedData = [
   },
   {
     referenceId: 'DL-2024-CBSE-10931',
-    demoMobile: '0000000001',
+    demoMobile: '0000000011',
     fullName: 'Siddharth Iyer',
     dob: '2006-10-10',
     gender: 'Male',
@@ -469,7 +469,7 @@ export const mockCandidatesSeedData = [
   },
   {
     referenceId: 'DL-2024-KRN-40118',
-    demoMobile: '0000000001',
+    demoMobile: '0000000012',
     fullName: 'Varun Hegde',
     dob: '2006-05-04',
     gender: 'Male',
@@ -510,7 +510,7 @@ export const mockCandidatesSeedData = [
   },
   {
     referenceId: 'DL-2024-UP-50225',
-    demoMobile: '0000000001',
+    demoMobile: '0000000013',
     fullName: 'Anjali Verma',
     dob: '2006-07-29',
     gender: 'Female',
@@ -551,7 +551,7 @@ export const mockCandidatesSeedData = [
   },
   {
     referenceId: 'DL-2024-CBSE-10935',
-    demoMobile: '0000000001',
+    demoMobile: '0000000014',
     fullName: 'Karan Mehra',
     dob: '2006-03-14',
     gender: 'Male',
@@ -592,7 +592,7 @@ export const mockCandidatesSeedData = [
   },
   {
     referenceId: 'DL-2024-ISC-20322',
-    demoMobile: '0000000001',
+    demoMobile: '0000000015',
     fullName: 'Rhea Sengupta',
     dob: '2006-11-22',
     gender: 'Female',
