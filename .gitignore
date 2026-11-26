@@ -36,8 +36,8 @@ pnpm-debug.log*
 lerna-debug.log*
 *.log
 
-# Large local binary/mock uploads (avoid uploading local PDFs & temp files)
-uploads/mock_documents/*.pdf
-uploads/letters/*.pdf
-server/uploads/mock_documents/*.pdf
-server/uploads/letters/*.pdf
+# Temporary test artifacts
+server/test_doc_*.pdf
+
+# Uploads (tracked for team sharing)
+# server/uploads/ is tracked so team members have mock DigiLocker documents and sample letters
