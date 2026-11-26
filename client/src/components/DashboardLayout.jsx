@@ -62,9 +62,9 @@ export default function DashboardLayout({ children, roleTitle }) {
   };
 
   return (
-    <div className="min-h-screen flex bg-[#F7F6F2]">
-      {/* Sidebar */}
-      <aside className="w-64 bg-[#FFFFFF] border-r border-[#DDDCD5] flex flex-col flex-shrink-0">
+    <div className="h-screen flex bg-[#F7F6F2] overflow-hidden">
+      {/* Sidebar - Fixed/Sticky on scroll */}
+      <aside className="w-64 h-full bg-[#FFFFFF] border-r border-[#DDDCD5] flex flex-col flex-shrink-0 z-30 select-none">
         {/* Brand header */}
         <div className="p-5 border-b border-[#DDDCD5] flex items-center space-x-3">
           <div className="w-9 h-9 rounded bg-[#254D3C] text-white flex items-center justify-center font-serif text-lg font-bold">
@@ -122,14 +122,14 @@ export default function DashboardLayout({ children, roleTitle }) {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-        <header className="h-14 bg-[#FFFFFF] border-b border-[#DDDCD5] px-6 flex items-center justify-between">
+      <main className="flex-1 flex flex-col min-w-0 h-full overflow-y-auto">
+        <header className="h-14 bg-[#FFFFFF] border-b border-[#DDDCD5] px-6 flex items-center justify-between flex-shrink-0 sticky top-0 z-20">
           <div className="text-xs text-[#6B716C]">
             Session: <span className="font-semibold text-[#252824]">2026–2027</span> • St. Jude Institute of Higher Sciences
           </div>
         </header>
 
-        <div className="p-6 md:p-8 max-w-7xl w-full mx-auto">
+        <div className="p-6 md:p-8 max-w-7xl w-full mx-auto flex-1">
           {children}
         </div>
       </main>
