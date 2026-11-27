@@ -96,12 +96,14 @@ EduVerify provides an interchangeable, decoupled **Mock DigiLocker Provider** st
 
 ### 📱 Fictional Demo Mobile Numbers for Testing
 
-| Demo Mobile Identifier | Associated Candidates | Board & Stream | Depository Documents & Scenario |
-| :--- | :--- | :--- | :--- |
-| `0000000001` | **Aarav Sharma**<br>**Priya Venkatesh** | CBSE (Science PCM)<br>CBSE (Science PCB) | Aadhaar Demo, Class 10, Class 12, Passing, Migration, Transfer.<br>Complete documentation; high-merit profiles. |
-| `0000000002` | **Rohan Banerjee**<br>**Ananya Deshmukh** | ICSE/ISC (Commerce)<br>Maharashtra State (Science) | Aadhaar Demo, Class 10, Class 12, Passing, Migration.<br>Ideal for BBA vs B.Tech qualification checks. |
-| `0000000003` | **Vikramaditya Rao**<br>**Meera Kulkarni** | CBSE (Science PCM)<br>Karnataka State (Science) | **Vikramaditya Rao has NO Aadhaar in demo depository** — ideal for testing the mandatory identity document **manual upload fallback**. |
-| `0000000004` | **Harshvardhan Singh**<br>**Nisha Agarwal** | UP State Board<br>CBSE (Humanities) | **Nisha Agarwal has NO Aadhaar in demo depository** — tests manual upload fallback for Arts/Economics programs. |
+| Demo Mobile | Candidate | Board and stream | Class 12 | Available documents |
+| :--- | :--- | :--- | ---: | :--- |
+| `0000000001` | Aarav Sharma | CBSE, Science (PCM) | 92.4% | Aadhaar, Class 10 and 12 marksheets, passing, migration and transfer certificates |
+| `0000000002` | Priya Venkatesh | CBSE, Science (PCB) | 87% | Aadhaar, Class 10 and 12 marksheets, passing certificate |
+| `0000000003` | Rohan Banerjee | ICSE/ISC, Commerce | 82% | Aadhaar, Class 10 and 12 marksheets, passing and migration certificates |
+| `0000000004` | Ananya Deshmukh | Maharashtra State Board, Science | 89% | Aadhaar, Class 10 and 12 marksheets, passing, migration and transfer certificates |
+| `0000000005` | Vikramaditya Rao | CBSE, Science (PCM) | 51% | Class 10 and 12 marksheets, passing certificate |
+| `0000000006` | Meera Kulkarni | Karnataka State Board, Science (PCMC) | 95% | Aadhaar, Class 10 and 12 marksheets, passing, migration and transfer certificates |
 
 > **Demonstration OTP:** Enter `123456` on the 6-digit verification screen (or click the *"Quick-fill (123456)"* helper button). No real SMS messages or telephone numbers are used.
 
