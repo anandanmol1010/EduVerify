@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { connectDB, disconnectDB } from '../config/db.js';
+import { mockDocumentsDirectory } from '../config/runtime.js';
 import { User } from '../models/User.js';
 import { Course } from '../models/Course.js';
 import { MockStudentRecord } from '../models/MockStudentRecord.js';
@@ -189,7 +190,7 @@ export const seedDatabase = async () => {
     await createIfMissing(Course, { code: course.code }, course);
   }
 
-  const uploadsDir = fileURLToPath(new URL('../../uploads/mock_documents/', import.meta.url));
+  const uploadsDir = mockDocumentsDirectory;
   fs.mkdirSync(uploadsDir, { recursive: true });
 
   console.log(`[Seed] Generating PDF credentials for ${mockCandidatesSeedData.length} mock candidate profiles...`);

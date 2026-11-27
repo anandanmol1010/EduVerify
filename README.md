@@ -176,6 +176,16 @@ npm run dev
 ```
 The client starts on `http://localhost:5173`.
 
+### Deploy on Render
+
+1. In the Render dashboard, create a **Blueprint** from this repository's `main` branch. [render.yaml](./render.yaml) builds the frontend and runs it with the API in one paid Starter web service. It mounts a 1 GB persistent disk for uploaded documents and generated letters.
+2. Enter `MONGODB_URI` when prompted. Render generates `JWT_SECRET`. In MongoDB Atlas, add the outbound IP ranges shown under the Render service's **Connect → Outbound** tab. If the initial deploy fails before Atlas access is configured, redeploy after adding the ranges. [Connecting Render to Atlas](https://render.com/docs/connect-to-mongodb-atlas)
+3. Open the service URL. `/api/health` should report that the database is connected. New admission-letter QR codes use the Render URL by default. Set `CLIENT_URL` in Render if you use a custom domain.
+
+Use the existing seeded Atlas database for the demo. A fresh database needs a one-time `npm run seed` from `server`. The deploy includes fictional DigiLocker PDFs from the repository. If you need PDFs or uploads created on another machine, copy its `documents` and `letters` directories to `/var/data/uploads` on Render to preserve existing links.
+
+Keep the public demo on fictional data. Restrict file access to authenticated owners and authorized staff before uploading real student records.
+
 ---
 
 ## 🔄 Complete End-to-End Walkthrough

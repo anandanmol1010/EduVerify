@@ -39,5 +39,6 @@ lerna-debug.log*
 # Temporary test artifacts
 server/test_doc_*.pdf
 
-# Uploads (tracked for team sharing)
-# server/uploads/ is tracked so team members have mock DigiLocker documents and sample letters
+# Runtime uploads. Fictional DigiLocker fixtures remain tracked.
+/server/uploads/documents/
+/server/uploads/letters/

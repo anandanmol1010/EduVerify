@@ -7,6 +7,7 @@ import { Application } from '../models/Application.js';
 import { Course } from '../models/Course.js';
 import { Notification } from '../models/Notification.js';
 import { generateAdmissionLetterPdf } from '../utils/admissionLetterGenerator.js';
+import { clientUrl, uploadsDirectory } from '../config/runtime.js';
 
 export class AdmissionError extends Error {
   constructor(message, status = 422, evaluation) {
@@ -59,9 +60,9 @@ export const approveAdmission = async ({ application, course, actor, automatic, 
 
   const admissionId = `SJ-${now.getFullYear()}-ADM-${randomBytes(8).toString('hex').toUpperCase()}`;
   const verificationToken = randomBytes(32).toString('hex');
-  const publicUrl = `${process.env.CLIENT_URL || 'http://localhost:5173'}/verify-admission/${admissionId}?token=${verificationToken}`;
+  const publicUrl = `${clientUrl()}/verify-admission/${admissionId}?token=${verificationToken}`;
   const filename = `admission-letter-${admissionId}.pdf`;
-  const outputPath = path.join(process.cwd(), 'uploads', 'letters', filename);
+  const outputPath = path.join(uploadsDirectory(), 'letters', filename);
   trackFile(outputPath);
   await generateAdmissionLetterPdf({
     admissionId, studentName: application.personalSnapshot?.fullName || actor.name,

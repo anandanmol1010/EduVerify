@@ -2,8 +2,10 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'node:url';
 
 import { connectDB, pingDB } from './config/db.js';
+import { clientUrl, mockDocumentsDirectory, uploadsDirectory } from './config/runtime.js';
 
 // Route imports
 import authRoutes from './routes/authRoutes.js';
@@ -21,7 +23,7 @@ const PORT = process.env.PORT || 5000;
 // Enable CORS
 app.use(
   cors({
-    origin: [process.env.CLIENT_URL || 'http://localhost:5173', 'http://127.0.0.1:5173'],
+    origin: [clientUrl(), 'http://127.0.0.1:5173'],
     credentials: true,
   })
 );
@@ -29,18 +31,13 @@ app.use(
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
-// Ensure upload folders exist
-const uploadsPath = path.join(process.cwd(), 'uploads');
-const subfolders = ['documents', 'mock_documents', 'letters'];
-subfolders.forEach((sub) => {
-  const fPath = path.join(uploadsPath, sub);
-  if (!fs.existsSync(fPath)) {
-    fs.mkdirSync(fPath, { recursive: true });
-  }
-});
-
-// Serve uploads as static resources
-app.use('/uploads', express.static(uploadsPath));
+const uploadsPath = uploadsDirectory();
+for (const directory of ['documents', 'letters']) {
+  const directoryPath = path.join(uploadsPath, directory);
+  fs.mkdirSync(directoryPath, { recursive: true });
+  app.use(`/uploads/${directory}`, express.static(directoryPath));
+}
+app.use('/uploads/mock_documents', express.static(mockDocumentsDirectory));
 
 // API routes
 app.use('/api/auth', authRoutes);
@@ -68,6 +65,14 @@ app.get('/api/health', async (req, res) => {
   });
 });
 
+const frontend = fileURLToPath(new URL('../../client/dist/', import.meta.url));
+if (fs.existsSync(path.join(frontend, 'index.html'))) {
+  app.use(express.static(frontend));
+  app.get(/^\/(?!api(?:\/|$)|uploads(?:\/|$)|assets(?:\/|$))/, (req, res) => {
+    res.sendFile(path.join(frontend, 'index.html'));
+  });
+}
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error('[Unhandled Error]:', err);
@@ -80,7 +85,7 @@ app.use((err, req, res, next) => {
 const startServer = async () => {
   try {
     if (!process.env.JWT_SECRET) {
-      throw new Error('Set JWT_SECRET in server/.env before starting the API.');
+      throw new Error('Set JWT_SECRET before starting the API.');
     }
     await connectDB();
 
