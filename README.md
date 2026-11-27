@@ -23,15 +23,15 @@ EduVerify is architected to balance real-world institutional rigor with modern f
 ### 2. Configurable Dynamic Eligibility Engine
 - Rather than hardcoding cutoff percentages or qualifying subjects inside frontend forms, eligibility rules are defined per course in MongoDB (`Course.eligibilityCriteria`).
 - The backend engine (`server/src/services/eligibilityEngine.js`) evaluates candidate Class 10th and 12th marks, verifies mandatory subject compliance (e.g., Mathematics and Physics for Engineering), calculates standardized composite scores, and outputs a structured rule-by-rule pass/fail verdict.
-- **Separation of Concerns:** Passing eligibility does *not* auto-admit a student; human administrative scrutiny and document verification are strictly mandatory prior to acceptance.
+- Students see failed academic rules before the document step. The server checks academic eligibility again at submission, along with document ownership, verification, and consistency with issuer records.
 
 ### 3. OCR & Discrepancy Auditing Pipeline
 - When candidates upload certificates manually (PDF, PNG, JPG), Multer stores files securely while `pdf-parse` (for text PDFs) and `Tesseract.js` (for scanned images) extract raw text.
 - Entity extraction heuristics extract candidate name, exam roll number, passing year, and board.
-- The system automatically compares extracted values with form inputs, flagging mismatches directly on the Admin's scrutiny desk.
+- Upload feedback shows detected mismatches to the student. Final submission checks readable document values against the current form.
 
 ### 4. Concurrency-Safe Seat Allotment & QR Verification
-- When an Administrator confirms an applicant, atomic seat incrementation checks current enrollment against `course.totalSeats` before finalizing admission, preventing over-allocation.
+- A fully verified application is accepted automatically. Seat allocation, the acceptance record, admission letter metadata, and the student notification are committed in one MongoDB Atlas transaction.
 - Generates an official PDF admission letter using `PDFKit` with a cryptographic verification token and embeds a QR code pointing to `/verify-admission/:admissionId`.
 - The public verification endpoint (`GET /api/letters/public-verify/:admissionId`) checks letter validity and displays the authenticated candidate's name (masked for privacy) and enrolled program.
 
@@ -190,95 +190,33 @@ The client starts on `http://localhost:5173`.
    - **Screen 1:** Click `+91 0000000001` or type any demo mobile $\rightarrow$ Click **Continue**.
    - **Screen 2:** Select an account (e.g., **Aarav Sharma** `A***v S***a`).
    - **Screen 3:** Enter 6-digit OTP `123456` (or use Quick-fill) $\rightarrow$ Click **Verify**.
-   - **Screen 4:** Selectively check the **Aadhaar Demo Identity Document**, Class 10th Marksheet, and Class 12th Marksheet $\rightarrow$ Click **"Allow & Share Selected Documents"**.
+   - **Screen 4:** Selectively check the **Aadhaar Demo Identity Document**, Class 10th Marksheet, Class 12th Marksheet, and any other documents required by the course $\rightarrow$ Click **"Allow & Share Selected Documents"**.
    - Observe automatic population of Stage 1 (Name, DOB, Gender, Address, PIN code) and Stage 2 (Class 10/12 roll numbers, marks, and subjects).
    - Enter missing details (such as School Name) manually.
-4. **Mandatory Identity Document & Document Scrutiny:**
-   - In **Stage 3 (Documents)**, review the checklist. The **Aadhaar Demo Identity Document** is mandatory. If an applicant denies consent or has an account without Aadhaar (e.g. `0000000003`), they can manually upload a sample identity document (PDF/PNG/JPG).
-5. **Eligibility Check & Submission:**
-   - In Stage 4, click **"Run Eligibility Check & Review"** to preview qualifications against cutoff rules.
-   - Click **"Submit Final Application"**; application transitions to `Pending Verification`.
-6. **Admin Scrutiny & Document Verification:**
-   - Log out and log in as `admin@eduverify.ac.in` (use the value of `SEED_ADMIN_PASSWORD`).
-   - Navigate to **"Applications"** (`/admin/applications`) and select the submitted application.
-   - Scrutinize documents, preview PDFs, compare OCR extracted entities, and click **"Mark Verified"** on each mandatory document (including Aadhaar).
-   - *(Optional)* If corrections are needed, click **"Request Correction"** with detailed remarks; the student receives a notification and can update documents and resubmit.
-7. **Final Acceptance & Seat Allocation:**
-   - With all mandatory documents verified, click **"Accept & Grant Admission"**.
-   - The system atomically increments course allocated seats and generates an official PDF Admission Letter with a cryptographically signed QR code.
-8. **Public QR Verification:**
-   - Scan the QR code or visit `/verify-admission/:admissionId` to inspect the public verification record (masked for student privacy).
+4. **Check marks and documents**
+   - Advance from Academic Details to check the course's cutoffs and subject requirements.
+   - Open the Documents step to review the required files. If an upload has a detected mismatch, correct the form or replace the file.
+5. **Submit and receive an admission letter**
+   - Select **Check Eligibility & Continue** for the final review. Submission becomes available once the marks and documents pass verification.
+   - Select **Submit Application**. The system reserves a seat, marks the application `Accepted`, and issues a letter under **My Admission Letters**.
+   - Sign in as an admin to review the accepted record or resolve applications already in the review queue.
+6. **Verify the letter**
+   - Scan the QR code or visit `/verify-admission/:admissionId` for the public verification page.
+
+Automatic approval uses marksheets imported through DigiLocker consent. Re-import older documents if the review asks for issuer verification. Manually uploaded documents receive OCR feedback and require an existing verification record for automatic approval. The current issuer is the fictional DigiLocker demo provider.
+
 
 ---
 
 ## 🧪 Automated Regression & Acceptance Test Suites
 
-EduVerify provides two comprehensive test suites:
+The older standalone workflow runners exercise the previous officer-led workflow. To check automatic approval, use a seeded Atlas test database and confirm the following cases:
 
-### 1. Updated DigiLocker Demo & Aadhaar Verification Suite (22 Tests)
-Validates mobile login, account selection, 6-digit OTP, explicit document consent, demographic & academic auto-fill, mandatory Aadhaar enforcement, and manual upload fallback:
-```bash
-cd server
-node test_updated_digilocker.js
-```
-*(Result: 22 / 22 Tests PASSED)*
+- Scores below a course cutoff block progress and direct submission requests.
+- Missing documents, manually uploaded marksheets, and issuer mismatches block final submission.
+- Matching DigiLocker documents and qualifying marks result in an accepted application and a downloadable letter.
+- Concurrent eligible applications for a course with one remaining seat result in a single acceptance.
 
-### 2. Full System Simplification Regression Test Suite (38 Scenarios)
-Validates the entire simplified 2-role lifecycle from registration to public QR admission letter validation:
-```bash
-cd server
-node test_simplification.js
-```
-*(Result: 38 / 38 Scenarios PASSED)*
-Output:
-```text
-===============================================================
-   EduVerify Final Simplification & Regression Test Suite     
-===============================================================
-
-[Scenario 01] ✓ PASS: Student registration and login
-[Scenario 02] ✓ PASS: Admin login with seed administrator credentials
-[Scenario 03] ✓ PASS: Student is forbidden from Admin endpoints
-[Scenario 04] ✓ PASS: Course creation and editing work
-[Scenario 05] ✓ PASS: Course eligibility requirements are configurable
-[Scenario 06] ✓ PASS: New applications initialize empty without hardcoded defaults
-[Scenario 07] ✓ PASS: Complete personal details with demographics and address
-[Scenario 08] ✓ PASS: Draft saving and retrieval persistence
-[Scenario 09] ✓ PASS: DigiLocker Demo authentication & consent workflow
-[Scenario 10] ✓ PASS: Selected documents retrieved from backend
-[Scenario 11] ✓ PASS: Imported personal and academic fields populate correctly
-[Scenario 12] ✓ PASS: Missing fields can be completed manually (e.g. School Name)
-[Scenario 13] ✓ PASS: Dynamic subject lists with custom obtained and maximum marks
-[Scenario 14] ✓ PASS: Manual-only admission works without DigiLocker
-[Scenario 15] ✓ PASS: Mixed document submission (DigiLocker + Manual) works
-[Scenario 16] ✓ PASS: Basic PDF text extraction and OCR supported for documents
-[Scenario 17] ✓ PASS: Mandatory missing documents block final submission
-[Scenario 18] ✓ PASS: Eligibility checking evaluates conditions accurately
-[Scenario 19] ✓ PASS: Passing eligibility does NOT automatically accept application
-[Scenario 20] ✓ PASS: Submitted application status transitions to Pending Verification
-[Scenario 22] ✓ PASS: Final acceptance is blocked when documents are unverified
-[Scenario 21] ✓ PASS: Admin can preview and verify individual documents
-[Scenario 23] ✓ PASS: Correction requested with remarks and status updated
-[Scenario 24] ✓ PASS: Resubmitted application returns to Pending Verification
-[Scenario 25] ✓ PASS: Student cannot approve their own application (RBAC enforced)
-[Scenario 26] ✓ PASS: Admin explicitly accepts eligible, verified application
-[Scenario 27] ✓ PASS: Admin can reject an application with remarks
-[Scenario 28] ✓ PASS: Seat allocated atomically upon acceptance without exceeding capacity
-[Scenario 29] ✓ PASS: Pending applications cannot generate admission letters
-[Scenario 30] ✓ PASS: Accepted applicant can access and download admission letter
-[Scenario 31] ✓ PASS: Public QR-based admission letter verification works
-[Scenario 32] ✓ PASS: Application status notifications are visible to student
-[Scenario 33] ✓ PASS: Admin dashboard statistics reflect actual database records
-[Scenario 34] ✓ PASS: Removed pages and navigation links are absent
-[Scenario 35] ✓ PASS: No retained functionality depends on deleted APIs or models
-[Scenario 36] ✓ PASS: Data persists across sessions and re-login
-[Scenario 37] ✓ PASS: Frontend production build compiles cleanly without errors
-[Scenario 38] ✓ PASS: Backend starts and connects cleanly to database
-
-===============================================================
-Results: 38 / 38 Scenarios PASSED
-===============================================================
-```
 
 ---
 

@@ -193,7 +193,7 @@ const applicationSchema = new mongoose.Schema(
       default: null,
     },
   },
-  { timestamps: true }
+  { timestamps: true, optimisticConcurrency: true }
 );
 
 applicationSchema.index({ student: 1, createdAt: -1 });

@@ -35,6 +35,7 @@ const eligibilityRulesSchema = new mongoose.Schema(
             'student_photo',
             'id_proof',
             'category_certificate',
+            'disability_certificate',
             'income_certificate',
             'other',
           ],

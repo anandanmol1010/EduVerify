@@ -338,6 +338,7 @@ export default function DigiLockerModal({ isOpen, onClose, onImportSuccess, appl
       const consentRes = await api.post('/digilocker/oauth/consent', {
         sessionId,
         decision: 'allow',
+        selectedDocTypes,
       });
 
       if (!consentRes.success) {

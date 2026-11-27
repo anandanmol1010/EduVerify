@@ -395,7 +395,7 @@ router.post('/oauth/authenticate', protect, async (req, res) => {
  */
 router.post('/oauth/consent', protect, async (req, res) => {
   try {
-    const { sessionId, decision } = req.body;
+    const { sessionId, decision, selectedDocTypes } = req.body;
 
     if (!sessionId || !decision) {
       return res.status(400).json({ success: false, message: 'Session ID and consent decision (allow/deny) are required.' });
@@ -441,10 +441,15 @@ router.post('/oauth/consent', protect, async (req, res) => {
     }
 
     if (decision === 'allow') {
+      if (selectedDocTypes !== undefined && (!Array.isArray(selectedDocTypes) || !selectedDocTypes.length ||
+          selectedDocTypes.some((type) => typeof type !== 'string'))) {
+        return res.status(400).json({ success: false, message: 'Select the documents you consent to share.' });
+      }
       // Issue short-lived authorization code (valid for 5 minutes)
       const authCode = `dlauth_${crypto.randomBytes(16).toString('hex')}`;
       session.state = 'CONSENTED';
       session.authCode = authCode;
+      session.selectedDocTypes = selectedDocTypes || [];
       await session.save();
 
       await logAudit({
@@ -681,17 +686,25 @@ router.post('/oauth/exchange', protect, async (req, res) => {
       });
     }
 
-    // Mark authorization code as used to prevent replay
-    session.codeUsed = true;
-    session.state = 'COMPLETED';
-    session.selectedDocTypes = selectedDocTypes;
-    await session.save();
-
-    // Resolve target application
     let application = null;
     const targetAppId = applicationId || session.applicationId;
     if (targetAppId) {
-      application = await Application.findById(targetAppId);
+      application = await Application.findOne({
+        _id: targetAppId, student: req.user._id, status: { $in: ['Draft', 'Correction Required'] },
+      });
+      if (!application) {
+        return res.status(409).json({ success: false, message: 'This application cannot receive document changes.' });
+      }
+    }
+    if (session.selectedDocTypes.length && selectedDocTypes.some((docType) => !session.selectedDocTypes.includes(docType))) {
+      return res.status(400).json({ success: false, message: 'Select only documents authorized during consent.' });
+    }
+    const consumed = await DigiLockerSession.updateOne(
+      { _id: session._id, state: 'CONSENTED', codeUsed: false },
+      { $set: { codeUsed: true, state: 'COMPLETED', selectedDocTypes } }
+    );
+    if (!consumed.modifiedCount) {
+      return res.status(409).json({ success: false, message: 'This authorization code has already been used.' });
     }
 
     // Perform actual document import and attach to application/student
@@ -700,13 +713,14 @@ router.post('/oauth/exchange', protect, async (req, res) => {
       application,
       recordId: session.mockStudent,
       selectedDocTypes,
+      consented: true,
     });
 
     const rec = result.record;
 
     if (application) {
       const newDocIds = result.importedDocuments.map((d) => d._id);
-      application.documents = [...new Set([...(application.documents || []), ...newDocIds])];
+      application.documents = [...new Set([...application.documents, ...newDocIds].map(String))];
       await application.save();
     }
 
@@ -827,7 +841,12 @@ router.post('/import', protect, async (req, res) => {
 
     let application = null;
     if (applicationId) {
-      application = await Application.findById(applicationId);
+      application = await Application.findOne({
+        _id: applicationId, student: req.user._id, status: { $in: ['Draft', 'Correction Required'] },
+      });
+      if (!application) {
+        return res.status(409).json({ success: false, message: 'This application cannot receive document changes.' });
+      }
     }
 
     const result = await digiLockerService.importSelectedDocuments({
@@ -840,7 +859,7 @@ router.post('/import', protect, async (req, res) => {
     const rec = result.record;
     if (application) {
       const newDocIds = result.importedDocuments.map((d) => d._id);
-      application.documents = [...new Set([...(application.documents || []), ...newDocIds])];
+      application.documents = [...new Set([...application.documents, ...newDocIds].map(String))];
       await application.save();
     }
 

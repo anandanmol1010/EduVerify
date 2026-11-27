@@ -63,7 +63,8 @@ export default function DocumentLockerPage() {
       });
 
       if (res.success) {
-        setSuccess('Document uploaded and processed with OCR successfully.');
+        if (res.mismatches?.length) setError(res.mismatches.join(' '));
+        else setSuccess('Document uploaded and checked for readable details.');
         setFile(null);
         setTitle('');
         fetchDocs();

@@ -25,6 +25,7 @@ const documentSchema = new mongoose.Schema(
         'student_photo',
         'id_proof',
         'category_certificate',
+        'disability_certificate',
         'income_certificate',
         'other',
       ],
@@ -41,6 +42,11 @@ const documentSchema = new mongoose.Schema(
     filePath: {
       type: String,
       required: true,
+    },
+    issuerRecord: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'MockStudentRecord',
+      default: null,
     },
     fileType: {
       type: String,
@@ -86,7 +92,7 @@ const documentSchema = new mongoose.Schema(
       mismatchDetails: [String],
     },
   },
-  { timestamps: true }
+  { timestamps: true, optimisticConcurrency: true }
 );
 
 documentSchema.index({ student: 1, createdAt: -1 });

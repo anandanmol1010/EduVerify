@@ -37,12 +37,12 @@ export default function GuidelinesPage() {
             2. Document Locker & Auto-Fill
           </h2>
           <p className="text-xs text-[#6B716C] leading-relaxed">
-            To speed up the application process, the portal includes an academic document locker feature. You can pull your marksheet details using your examination roll number and board name.
+            Import both marksheets from DigiLocker Demo so the portal can verify your aggregate and subject marks.
           </p>
           <div className="p-3 bg-[#F7F6F2] rounded border border-[#DDDCD5] text-xs text-[#6B716C] space-y-1">
             <p><strong>Step 1:</strong> On the application form, click "Auto-Fill via DigiLocker Demo".</p>
-            <p><strong>Step 2:</strong> Enter your examination board, roll number, and year of passing.</p>
-            <p><strong>Step 3:</strong> Select your certificates and click Import. Your subject marks will be filled into the form automatically.</p>
+            <p><strong>Step 2:</strong> Choose your demo account and verify the demo OTP.</p>
+            <p><strong>Step 3:</strong> Select the required documents and grant consent. Your subject marks will fill in automatically.</p>
           </div>
         </div>
 
@@ -55,7 +55,7 @@ export default function GuidelinesPage() {
             If your marksheet or certificate is not available through the demo document locker, you can upload clear scanned copies or photos in PDF, JPG, or PNG format.
           </p>
           <p className="text-xs text-[#6B716C] leading-relaxed">
-            Please make sure the text and scores on your uploaded certificates match the details you entered in your application form so the admissions administration can verify them smoothly.
+            The upload check shows any readable details that differ from your application. Correct the form or replace the file before submitting. Uploaded marksheets need a DigiLocker import for automatic approval.
           </p>
         </div>
 
@@ -65,11 +65,11 @@ export default function GuidelinesPage() {
             4. Review Decisions & Admission Letters
           </h2>
           <p className="text-xs text-[#6B716C] leading-relaxed">
-            Once submitted, your application is reviewed by our admissions team.
+            The portal checks course eligibility before you reach the document step. Final submission opens when your documents and academic details pass verification.
           </p>
           <ul className="text-xs text-[#252824] space-y-1.5 list-disc list-inside">
-            <li>If any document needs clarification, the administrator will request a correction and you will receive an in-app notice.</li>
-            <li>When approved and confirmed, your official Provisional Admission Confirmation Letter is generated instantly.</li>
+            <li>Resolve any issues listed during review before submitting.</li>
+            <li>When you submit a verified application, the portal reserves an available seat, approves your admission, and issues your letter.</li>
             <li>Your letter includes a scannable QR code that allows anyone to verify your admission status online without exposing your private marks.</li>
           </ul>
         </div>

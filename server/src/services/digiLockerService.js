@@ -35,7 +35,7 @@ class MockDigiLockerProvider {
   /**
    * Pull and attach documents to a user application
    */
-  async importSelectedDocuments({ user, application, recordId, selectedDocTypes }) {
+  async importSelectedDocuments({ user, application, recordId, selectedDocTypes, consented = false }) {
     const record = await MockStudentRecord.findById(recordId);
     if (!record) {
       throw new Error('DigiLocker Demo Record not found');
@@ -48,11 +48,35 @@ class MockDigiLockerProvider {
         continue;
       }
 
+      const classRecord = docMeta.docType === 'class10_marksheet' ? record.class10 : record.class12;
+      const extractedData = {
+        candidateName: record.fullName,
+        rollNumber: classRecord?.rollNumber || record.rollNumber,
+        board: record.board,
+        passingYear: String(classRecord?.passingYear || record.passingYear),
+        percentage: String(classRecord?.percentage ?? ''),
+        confidenceScore: 98,
+      };
+      const metadata = {
+        title: `${docMeta.title} (DigiLocker Demo Archive)`,
+        source: 'DigiLocker Demo',
+        filePath: docMeta.fileUrl,
+        fileType: 'application/pdf',
+        fileSize: 124500,
+        issuerRecord: consented ? record._id : null,
+        verificationStatus: consented ? 'Verified' : 'Pending Verification',
+        verifiedBy: null,
+        verifiedAt: consented ? new Date() : null,
+        verificationRemarks: consented ? 'Verified by the DigiLocker demo provider.' : '',
+        extractedData,
+      };
+
       // Check if doc already imported/uploaded for this application
       let existingDoc = null;
       if (application) {
         existingDoc = await Document.findOne({
           application: application._id,
+          student: user._id,
           docType: docMeta.docType,
         });
       } else {
@@ -64,50 +88,15 @@ class MockDigiLockerProvider {
       }
 
       if (existingDoc) {
-        // Replace existing document record and reset verification status to Pending Verification
-        existingDoc.title = `${docMeta.title} (DigiLocker Demo Archive)`;
-        existingDoc.source = 'DigiLocker Demo';
-        existingDoc.filePath = docMeta.fileUrl;
-        existingDoc.fileType = 'application/pdf';
-        existingDoc.fileSize = 124500;
-        existingDoc.verificationStatus = 'Pending Verification';
-        existingDoc.verifiedBy = null;
-        existingDoc.verifiedAt = null;
-        existingDoc.verificationRemarks = '';
-        existingDoc.extractedData = {
-          candidateName: record.fullName,
-          rollNumber: record.rollNumber,
-          board: record.board,
-          passingYear: String(record.passingYear),
-          percentage: String(record.class12?.percentage || record.class10?.percentage || ''),
-          confidenceScore: 98,
-          isMismatched: false,
-          mismatchDetails: [],
-        };
+        existingDoc.set(metadata);
         await existingDoc.save();
         createdDocs.push(existingDoc);
       } else {
-        // Create new document with explicit status: Pending Verification
         const newDoc = await Document.create({
           student: user._id,
           application: application ? application._id : null,
           docType: docMeta.docType,
-          title: `${docMeta.title} (DigiLocker Demo Archive)`,
-          source: 'DigiLocker Demo',
-          filePath: docMeta.fileUrl,
-          fileType: 'application/pdf',
-          fileSize: 124500,
-          verificationStatus: 'Pending Verification',
-          extractedData: {
-            candidateName: record.fullName,
-            rollNumber: record.rollNumber,
-            board: record.board,
-            passingYear: String(record.passingYear),
-            percentage: String(record.class12?.percentage || record.class10?.percentage || ''),
-            confidenceScore: 98,
-            isMismatched: false,
-            mismatchDetails: [],
-          },
+          ...metadata,
         });
         createdDocs.push(newDoc);
       }

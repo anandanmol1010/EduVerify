@@ -11,7 +11,6 @@ import {
   ArrowLeft,
   Award,
   ShieldCheck,
-  Send,
 } from 'lucide-react';
 
 export default function ApplicationDetailPage() {
@@ -19,8 +18,6 @@ export default function ApplicationDetailPage() {
   const [application, setApplication] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [resubmitting, setResubmitting] = useState(false);
-  const [correctionNote, setCorrectionNote] = useState('');
 
   const fetchApp = async () => {
     try {
@@ -36,22 +33,6 @@ export default function ApplicationDetailPage() {
   useEffect(() => {
     fetchApp();
   }, [id]);
-
-  const handleResubmit = async () => {
-    setResubmitting(true);
-    try {
-      const res = await api.put(`/applications/${id}`, {
-        submitNow: true,
-      });
-      if (res.success) {
-        fetchApp();
-      }
-    } catch (err) {
-      alert(err.message || 'Error resubmitting application');
-    } finally {
-      setResubmitting(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -101,6 +82,9 @@ export default function ApplicationDetailPage() {
             <p className="text-xs text-[#6B716C] mt-0.5">
               Course Code: {app.course?.code} • Submitted: {app.submittedAt ? new Date(app.submittedAt).toLocaleDateString() : 'Draft'}
             </p>
+            {app.status === 'Accepted' && app.statusHistory?.at(-1)?.changedByRole === 'system' && (
+              <p className="mt-2 text-xs font-semibold text-[#254D3C]">Automatically approved after academic and document verification.</p>
+            )}
           </div>
 
           {(app.status === 'Accepted' || app.status === 'Admission Confirmed') && (
@@ -139,18 +123,11 @@ export default function ApplicationDetailPage() {
             </p>
             <div className="pt-2 flex gap-3">
               <Link
-                to="/student/documents"
+                to={`/student/applications/new?appId=${app._id}`}
                 className="px-3 py-1.5 bg-white border border-orange-300 rounded font-semibold text-orange-900 hover:bg-orange-100"
               >
-                Manage & Replace Documents
+                Correct and review application
               </Link>
-              <button
-                onClick={handleResubmit}
-                disabled={resubmitting}
-                className="px-3 py-1.5 bg-[#254D3C] text-white rounded font-semibold hover:bg-[#1c3b2e]"
-              >
-                {resubmitting ? 'Submitting...' : 'Resubmit for Verification'}
-              </button>
             </div>
           </div>
         )}

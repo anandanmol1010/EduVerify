@@ -82,15 +82,15 @@ export const parseExtractedAcademicData = (rawText) => {
   }
 
   // Percentage Match
-  const pctRegex = /(?:percentage|aggregate|score|total\s*marks|cgpa)\s*[:.-]?\s*(\d{2}(?:\.\d{1,2})?)\s*%?/i;
+  const pctRegex = /(?:percentage|aggregate)\s*[:.-]?\s*(100|\d{1,2})(\.\d{1,2})?\s*%?(?![\d.])/i;
   const pctMatch = rawText.match(pctRegex);
   if (pctMatch && pctMatch[1]) {
-    result.percentage = pctMatch[1];
+    result.percentage = pctMatch[1] + (pctMatch[2] || '');
   }
 
   // Candidate Name Match
-  const nameRegex = /(?:candidate\s*name|student\s*name|name\s*of\s*candidate|name)\s*[:.-]?\s*([A-Za-z\s.]{3,35})/i;
-  const nameMatch = rawText.match(nameRegex);
+  const nameRegex = /^(?:candidate[ \t]*name|student[ \t]*name|name[ \t]*of[ \t]*candidate|name)[ \t]*[:.-][ \t]*([\p{L} .'-]{3,70})$/iu;
+  const nameMatch = lines.map((line) => line.match(nameRegex)).find(Boolean);
   if (nameMatch && nameMatch[1]) {
     const candidate = nameMatch[1].trim();
     if (!/board|school|institution|examination|marks|result/i.test(candidate)) {
@@ -106,7 +106,7 @@ export const detectDataMismatches = (extracted, formDetails) => {
   const mismatches = [];
 
   if (extracted.rollNumber && formDetails.rollNumber) {
-    if (extracted.rollNumber.toLowerCase() !== formDetails.rollNumber.toLowerCase()) {
+    if (extracted.rollNumber.trim().toLowerCase() !== String(formDetails.rollNumber).trim().toLowerCase()) {
       mismatches.push(`Roll Number mismatch: Document has "${extracted.rollNumber}", Form has "${formDetails.rollNumber}"`);
     }
   }
@@ -117,9 +117,15 @@ export const detectDataMismatches = (extracted, formDetails) => {
     }
   }
 
+  if (extracted.percentage && formDetails.percentage != null && formDetails.percentage !== '' &&
+      Math.abs(Number(extracted.percentage) - Number(formDetails.percentage)) > 0.05) {
+    mismatches.push(`Percentage mismatch: Document has ${extracted.percentage}%, form has ${formDetails.percentage}%.`);
+  }
+
   if (extracted.candidateName && formDetails.candidateName) {
-    const docName = extracted.candidateName.toLowerCase().replace(/[^a-z]/g, '');
-    const formName = formDetails.candidateName.toLowerCase().replace(/[^a-z]/g, '');
+    const normalizeName = (value) => String(value).normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{M}]/gu, '');
+    const docName = normalizeName(extracted.candidateName);
+    const formName = normalizeName(formDetails.candidateName);
     if (docName && formName && !docName.includes(formName) && !formName.includes(docName)) {
       mismatches.push(`Candidate Name discrepancy: Document says "${extracted.candidateName}", Form says "${formDetails.candidateName}"`);
     }

@@ -32,29 +32,29 @@ export const evaluateEligibility = ({ course, academic10th, academic12th, docume
 
   // 1. Class 10 Percentage Check
   const class10Pct = Number(academic10th?.percentage || 0);
-  if (class10Pct >= criteria.minClass10Percentage) {
+  if (class10Pct >= criteria.minClass10Percentage && class10Pct <= 100) {
     passedRules.push(`Class 10th aggregate score: ${class10Pct}% (Min required: ${criteria.minClass10Percentage}%)`);
   } else {
-    failedRules.push(`Class 10th aggregate score is ${class10Pct}%, below the required minimum of ${criteria.minClass10Percentage}%.`);
+    failedRules.push(`Class 10 aggregate must be between ${criteria.minClass10Percentage}% and 100% (entered ${class10Pct}%).`);
   }
 
   // 2. Class 12 Percentage Check
   const class12Pct = Number(academic12th?.percentage || 0);
-  if (class12Pct >= criteria.minClass12Percentage) {
+  if (class12Pct >= criteria.minClass12Percentage && class12Pct <= 100) {
     passedRules.push(`Class 12th aggregate score: ${class12Pct}% (Min required: ${criteria.minClass12Percentage}%)`);
   } else {
-    failedRules.push(`Class 12th aggregate score is ${class12Pct}%, below the required minimum of ${criteria.minClass12Percentage}%.`);
+    failedRules.push(`Class 12 aggregate must be between ${criteria.minClass12Percentage}% and 100% (entered ${class12Pct}%).`);
   }
 
   scoreCalculated = (class12Pct * 0.7) + (class10Pct * 0.3);
 
   // 3. Subject-wise Evaluation (Class 12)
   if (criteria.requiredSubjects && criteria.requiredSubjects.length > 0) {
-    const studentSubjects = academic12th?.subjects || [];
+    const studentSubjects = Array.isArray(academic12th?.subjects) ? academic12th.subjects : [];
     
     criteria.requiredSubjects.forEach((reqSub) => {
       const found = studentSubjects.find(
-        (s) => s.subjectName && s.subjectName.toLowerCase().includes(reqSub.subjectName.toLowerCase())
+        (s) => typeof s?.subjectName === 'string' && s.subjectName.toLowerCase().includes(reqSub.subjectName.toLowerCase())
       );
 
       if (!found) {
@@ -63,10 +63,10 @@ export const evaluateEligibility = ({ course, academic10th, academic12th, docume
         }
       } else {
         const marks = Number(found.marksObtained || 0);
-        if (marks >= reqSub.minMarks) {
+        if (marks >= reqSub.minMarks && marks <= Number(found.maxMarks ?? 100)) {
           passedRules.push(`Subject '${found.subjectName}': scored ${marks}/${found.maxMarks || 100} (Min required: ${reqSub.minMarks})`);
         } else {
-          failedRules.push(`Subject '${found.subjectName}' score ${marks} is lower than required minimum ${reqSub.minMarks}.`);
+          failedRules.push(`Subject '${found.subjectName}' score ${marks} must be at least ${reqSub.minMarks} and within the maximum marks.`);
         }
       }
     });

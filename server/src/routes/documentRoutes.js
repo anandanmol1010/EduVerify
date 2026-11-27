@@ -17,6 +17,12 @@ router.post('/upload', protect, uploadDocument.single('file'), async (req, res) 
     }
 
     const { docType, title, applicationId, rollNumber, candidateName, passingYear } = req.body;
+    const application = applicationId ? await Application.findOne({
+      _id: applicationId, student: req.user._id, status: { $in: ['Draft', 'Correction Required'] },
+    }) : null;
+    if (applicationId && !application) {
+      return res.status(409).json({ success: false, message: 'This application cannot receive document changes.' });
+    }
 
     const relativePath = `/uploads/documents/${req.file.filename}`;
     const absolutePath = req.file.path;
@@ -45,6 +51,7 @@ router.post('/upload', protect, uploadDocument.single('file'), async (req, res) 
       rollNumber: rollNumber || '',
       candidateName: candidateName || req.user.name,
       passingYear: passingYear || '',
+      percentage: req.body.percentage,
     });
 
     let doc;
@@ -53,6 +60,7 @@ router.post('/upload', protect, uploadDocument.single('file'), async (req, res) 
     if (applicationId) {
       existingDoc = await Document.findOne({
         application: applicationId,
+        student: req.user._id,
         docType: docType || 'other',
       });
     } else {
@@ -66,6 +74,7 @@ router.post('/upload', protect, uploadDocument.single('file'), async (req, res) 
     if (existingDoc) {
       existingDoc.title = title || req.file.originalname;
       existingDoc.source = 'Manual Upload';
+      existingDoc.issuerRecord = null;
       existingDoc.filePath = relativePath;
       existingDoc.fileType = req.file.mimetype;
       existingDoc.fileSize = req.file.size;
@@ -101,14 +110,9 @@ router.post('/upload', protect, uploadDocument.single('file'), async (req, res) 
     }
 
     // Associate with application if provided
-    if (applicationId) {
-      const app = await Application.findById(applicationId);
-      if (app) {
-        if (!app.documents.includes(doc._id)) {
-          app.documents.push(doc._id);
-          await app.save();
-        }
-      }
+    if (application && !application.documents.includes(doc._id)) {
+      application.documents.push(doc._id);
+      await application.save();
     }
 
     await logAudit({
@@ -159,6 +163,9 @@ router.patch('/:id/verify', protect, authorize('admin'), async (req, res) => {
     }
 
     const validStatuses = ['Pending Verification', 'Verified', 'Correction Required', 'Rejected'];
+    if (doc.application && await Application.exists({ _id: doc.application, status: 'Accepted' })) {
+      return res.status(409).json({ success: false, message: 'An accepted application has finalized documents.' });
+    }
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ success: false, message: 'Invalid verification status' });
     }
@@ -211,7 +218,8 @@ router.delete('/:id', protect, async (req, res) => {
       }
     }
 
-    await doc.deleteOne();
+    const result = await Document.deleteOne({ _id: doc._id, __v: doc.__v });
+    if (!result.deletedCount) return res.status(409).json({ success: false, message: 'The document has changed. Refresh and try again.' });
     return res.json({ success: true, message: 'Document removed successfully' });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });

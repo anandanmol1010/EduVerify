@@ -130,7 +130,7 @@ export default function NewApplicationPage() {
         const [courseRes, userRes, docRes] = await Promise.all([
           api.get('/courses'),
           api.get('/auth/me'),
-          api.get('/documents/my-documents'),
+          api.get('/documents/my-documents', { params: { applicationId: existingAppId || undefined } }),
         ]);
 
         let loadedCourses = [];
@@ -213,6 +213,8 @@ export default function NewApplicationPage() {
 
     init();
   }, [initialCourseId, existingAppId]);
+
+  const documentsUrl = currentAppId ? `/documents/my-documents?applicationId=${currentAppId}` : '/documents/my-documents';
 
   // Handle Permanent Address Change with Auto-Sync to Correspondence if checked
   const handlePermanentAddressChange = (field, value) => {
@@ -324,7 +326,7 @@ export default function NewApplicationPage() {
     }
 
     // Refresh documents list
-    api.get('/documents/my-documents').then((d) => {
+    api.get(documentsUrl).then((d) => {
       if (d.success) setAttachedDocs(d.documents);
     });
   };
@@ -339,15 +341,13 @@ export default function NewApplicationPage() {
     const merged = mergePersonalDetails(personal, pendingImportResult, conflictDecisions);
     setPersonal(merged.personal);
 
-    // Record discrepancies for admission officer review
+    // Preserve the applicant's conflict resolution in the draft.
     const loggedDiscrepancies = detectedConflicts.map((c) => ({
       field: c.field,
-      label: c.label,
-      userValue: String(c.currentValue),
+      enteredValue: String(c.currentValue),
       importedValue: String(c.importedValue),
-      chosenValue: conflictDecisions[c.field] === 'keep' ? String(c.currentValue) : String(c.importedValue),
-      resolvedSource: conflictDecisions[c.field] === 'keep' ? 'manual' : 'imported',
-      timestamp: new Date().toISOString(),
+      source: 'DigiLocker Demo',
+      resolved: conflictDecisions[c.field] !== 'keep',
     }));
 
     setAcademic((prev) => ({
@@ -453,7 +453,14 @@ export default function NewApplicationPage() {
       formData.append('file', file);
       formData.append('docType', docType);
       formData.append('title', docName);
-      formData.append('rollNumber', academic.class12.rollNumber || academic.class10.rollNumber || '');
+      if (currentAppId) formData.append('applicationId', currentAppId);
+      const marksheet = docType === 'class10_marksheet' ? academic.class10
+        : docType === 'class12_marksheet' ? academic.class12 : null;
+      if (marksheet) {
+        formData.append('rollNumber', marksheet.rollNumber || '');
+        formData.append('passingYear', marksheet.passingYear || '');
+        formData.append('percentage', marksheet.percentage ?? '');
+      }
       formData.append('candidateName', personal.fullName);
 
       const res = await api.post('/documents/upload', formData, {
@@ -461,8 +468,9 @@ export default function NewApplicationPage() {
       });
 
       if (res.success) {
-        const dRes = await api.get('/documents/my-documents');
+        const dRes = await api.get(documentsUrl);
         if (dRes.success) setAttachedDocs(dRes.documents);
+        if (res.mismatches?.length) setError(res.mismatches.join(' '));
       }
     } catch (err) {
       setError(err.message || `Failed to upload ${docName}`);
@@ -476,7 +484,7 @@ export default function NewApplicationPage() {
     if (!window.confirm('Are you sure you want to remove this document?')) return;
     try {
       await api.delete(`/documents/${docId}`);
-      const dRes = await api.get('/documents/my-documents');
+      const dRes = await api.get(documentsUrl);
       if (dRes.success) setAttachedDocs(dRes.documents);
     } catch (err) {
       alert(err.message || 'Failed to remove document');
@@ -494,6 +502,8 @@ export default function NewApplicationPage() {
 
   const standardDocumentTypes = [
     { docType: 'aadhaar_card', docName: 'Aadhaar Demo Identity Document', isMandatory: true },
+    { docType: 'class10_marksheet', docName: 'Class 10 Marksheet', isMandatory: true },
+    { docType: 'class12_marksheet', docName: 'Class 12 Marksheet', isMandatory: true },
     { docType: 'student_photo', docName: 'Student Photograph', isMandatory: false },
     { docType: 'migration_certificate', docName: 'Migration Certificate', isMandatory: false },
     { docType: 'transfer_certificate', docName: 'Transfer Certificate', isMandatory: false },
@@ -501,23 +511,32 @@ export default function NewApplicationPage() {
     { docType: 'disability_certificate', docName: 'PwD Disability Certificate', isMandatory: personal.hasDisability },
   ];
 
-  const fullChecklist = [...courseRequiredDocs];
+  const fullChecklist = courseRequiredDocs.map((doc) => ({ ...doc }));
   standardDocumentTypes.forEach((std) => {
-    if (!fullChecklist.some((d) => d.docType === std.docType)) {
-      fullChecklist.push(std);
-    }
+    const configured = fullChecklist.find((doc) => doc.docType === std.docType);
+    if (configured) configured.isMandatory ||= std.isMandatory;
+    else fullChecklist.push(std);
   });
 
-  const mandatoryCount = fullChecklist.filter((d) => d.isMandatory).length;
+  const checklistDocuments = fullChecklist.map(({ docType }) => {
+    const available = attachedDocs.filter((doc) => doc.docType === docType);
+    return available.find((doc) => currentAppId && doc.application === currentAppId)
+      || available.find((doc) => !doc.application);
+  }).filter(Boolean);
+  const mandatoryCount = fullChecklist.filter((doc) => doc.isMandatory).length;
   const submittedMandatoryCount = fullChecklist.filter(
-    (d) => d.isMandatory && attachedDocs.some((ad) => ad.docType === d.docType)
+    (doc) => doc.isMandatory && checklistDocuments.some((attached) => attached.docType === doc.docType)
   ).length;
   const missingMandatoryCount = mandatoryCount - submittedMandatoryCount;
 
-  // Run Eligibility Check
-  const handleCheckEligibility = async () => {
+  const handleCheckEligibility = async (academicOnly = false) => {
     if (!selectedCourse) return;
+    if (academicOnly && !validateStage2()) {
+      setError('Please fill in all mandatory Class 10 and Class 12 academic fields.');
+      return;
+    }
     setLoading(true);
+    setEvaluation(null);
     setError('');
 
     try {
@@ -525,9 +544,15 @@ export default function NewApplicationPage() {
         courseId: selectedCourse._id,
         academic10th: academic.class10,
         academic12th: academic.class12,
+        academicOnly,
+        personalSnapshot: personal,
+        applicationId: currentAppId || undefined,
+        documentIds: checklistDocuments.map((doc) => doc._id),
       });
-
-      if (res.success) {
+      if (academicOnly) {
+        if (res.evaluation.isEligible) setStep(3);
+        else setError(`Academic eligibility: ${res.evaluation.status}. ${res.evaluation.rulesFailed.join(' ')}`);
+      } else {
         setEvaluation(res.evaluation);
         setStep(4);
       }
@@ -543,11 +568,10 @@ export default function NewApplicationPage() {
     setLoading(true);
     setError('');
 
-    if (!isDraft && missingMandatoryCount > 0) {
+    if (!isDraft && !evaluation?.canSubmit) {
       setLoading(false);
-      return setError(
-        `Please upload or import all required documents before submitting. You have ${missingMandatoryCount} missing mandatory document(s).`
-      );
+      setError('Resolve the eligibility and document issues before submitting.');
+      return;
     }
 
     try {
@@ -556,7 +580,7 @@ export default function NewApplicationPage() {
         courseId: selectedCourse._id,
         personalSnapshot: personal,
         academicSnapshot: academic,
-        documentIds: attachedDocs.map((d) => d._id),
+        documentIds: checklistDocuments.map((doc) => doc._id),
         isDraft,
       };
 
@@ -573,6 +597,7 @@ export default function NewApplicationPage() {
         navigate(`/student/applications/${res.application?._id || currentAppId}`);
       }
     } catch (err) {
+      if (err.evaluation) setEvaluation(err.evaluation);
       setError(err.message || 'Failed to submit admission application.');
     } finally {
       setLoading(false);
@@ -645,6 +670,7 @@ export default function NewApplicationPage() {
                 </label>
                 <select
                   value={selectedCourse?._id || ''}
+                  disabled={Boolean(currentAppId)}
                   onChange={(e) => {
                     const match = courses.find((c) => c._id === e.target.value);
                     setSelectedCourse(match);
@@ -1753,7 +1779,7 @@ export default function NewApplicationPage() {
 
             {/* Footer Verification Notice matching screenshot */}
             <p className="text-[11px] text-[#6B716C] mt-6 italic">
-              Imported information remains subject to admission officer verification.
+              Imported marks are checked against the issuer record when you submit.
             </p>
 
             {/* Step 2 Actions */}
@@ -1767,14 +1793,8 @@ export default function NewApplicationPage() {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  if (!validateStage2()) {
-                    setError('Please fill in all mandatory Class 10th and Class 12th academic fields.');
-                    return;
-                  }
-                  setError('');
-                  setStep(3);
-                }}
+                onClick={() => handleCheckEligibility(true)}
+                disabled={loading}
                 className="px-5 py-2.5 bg-[#254D3C] text-white text-xs font-semibold rounded hover:bg-[#1c3b2e] flex items-center shadow-sm"
               >
                 Proceed to Documents
@@ -1795,7 +1815,7 @@ export default function NewApplicationPage() {
                   Stage 3: Required Documents Checklist
                 </h2>
                 <p className="text-xs text-[#6B716C]">
-                  Submit each document via manual upload (PDF/PNG/JPG) or import directly using the demo DigiLocker tool.
+                  Import both marksheets through DigiLocker to verify subject marks. Manual uploads are checked for readable fields and mismatches.
                 </p>
               </div>
               <button
@@ -1833,7 +1853,7 @@ export default function NewApplicationPage() {
             {/* Checklist Table */}
             <div className="space-y-3">
               {fullChecklist.map((item) => {
-                const attached = attachedDocs.find((ad) => ad.docType === item.docType);
+                const attached = checklistDocuments.find((ad) => ad.docType === item.docType);
                 const isUploading = uploadingDocType === item.docType;
 
                 return (
@@ -1871,6 +1891,12 @@ export default function NewApplicationPage() {
                         <div className="text-[11px] text-[#6B716C] mt-1">
                           Not submitted yet
                         </div>
+                      )}
+
+                      {attached?.extractedData?.mismatchDetails?.length > 0 && (
+                        <ul className="mt-1 text-[11px] text-rose-800 list-disc list-inside">
+                          {attached.extractedData.mismatchDetails.map((mismatch) => <li key={mismatch}>{mismatch}</li>)}
+                        </ul>
                       )}
                     </div>
 
@@ -1931,8 +1957,8 @@ export default function NewApplicationPage() {
               </button>
               <button
                 type="button"
-                onClick={handleCheckEligibility}
-                disabled={loading}
+                onClick={() => handleCheckEligibility()}
+                disabled={loading || Boolean(uploadingDocType)}
                 className="px-5 py-2.5 bg-[#254D3C] text-white text-xs font-semibold rounded hover:bg-[#1c3b2e] flex items-center shadow-sm"
               >
                 {loading ? 'Evaluating Requirements...' : 'Check Eligibility & Continue'}
@@ -2017,6 +2043,20 @@ export default function NewApplicationPage() {
               </div>
             )}
 
+            {evaluation?.blockers?.length > 0 && (
+              <div className="p-3 rounded border border-rose-200 bg-rose-50 text-xs text-rose-900" role="alert">
+                <h3 className="font-bold">Resolve these issues before submitting</h3>
+                <ul className="mt-1 list-disc list-inside space-y-1">
+                  {evaluation.blockers.map((issue) => <li key={issue}>{issue}</li>)}
+                </ul>
+              </div>
+            )}
+            {evaluation?.canSubmit && (
+              <p className="p-3 rounded border border-emerald-200 bg-emerald-50 text-xs text-emerald-900">
+                Your marks and documents meet the requirements. Submitting will approve your admission and issue your letter.
+              </p>
+            )}
+
             {/* Snapshot Summary */}
             <div className="bg-[#F7F6F2] p-4 rounded border border-[#DDDCD5] space-y-3 text-xs">
               <h4 className="font-bold text-[#252824]">Application Overview Snapshot</h4>
@@ -2069,7 +2109,7 @@ export default function NewApplicationPage() {
                 <button
                   type="button"
                   onClick={() => handleSubmitApplication(false)}
-                  disabled={loading || missingMandatoryCount > 0}
+                  disabled={loading || !evaluation?.canSubmit}
                   className="px-5 py-2.5 bg-[#254D3C] text-white text-xs font-semibold rounded hover:bg-[#1c3b2e] shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading ? 'Submitting...' : 'Submit Application'}
@@ -2086,6 +2126,7 @@ export default function NewApplicationPage() {
           isOpen={isDigiLockerOpen}
           onClose={() => setIsDigiLockerOpen(false)}
           onImportSuccess={handleDigiLockerImportSuccess}
+          applicationId={currentAppId || undefined}
         />
 
         {/* ========================================================================= */}
@@ -2148,7 +2189,7 @@ export default function NewApplicationPage() {
               <div className="p-3 bg-[#F7F6F2] rounded text-[11px] text-[#6B716C] flex items-center space-x-2">
                 <Info className="w-4 h-4 text-[#254D3C] flex-shrink-0" />
                 <span>
-                  Any choice to keep divergent manual entries will be noted as a discrepancy for the admission officer's scrutiny.
+                  The application must match the verified DigiLocker details before you can submit.
                 </span>
               </div>
 

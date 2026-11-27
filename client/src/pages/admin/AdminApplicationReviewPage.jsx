@@ -156,7 +156,7 @@ export default function AdminApplicationReviewPage() {
   const hasAvailableSeats = (course?.totalSeats - course?.allocatedSeats) > 0;
 
   const canAccept =
-    app.status !== 'Accepted' &&
+    ['Submitted', 'Pending Verification', 'Resubmitted'].includes(app.status) &&
     isEligible &&
     missingMandatoryDocs.length === 0 &&
     unverifiedMandatoryDocs.length === 0 &&

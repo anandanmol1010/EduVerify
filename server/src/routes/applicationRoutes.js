@@ -1,176 +1,138 @@
 import express from 'express';
+import { randomBytes } from 'node:crypto';
+import mongoose from 'mongoose';
 import { Application } from '../models/Application.js';
 import { Course } from '../models/Course.js';
 import { Document } from '../models/Document.js';
 import { Notification } from '../models/Notification.js';
-import { AdmissionLetter } from '../models/AdmissionLetter.js';
+import { User } from '../models/User.js';
 import { protect, authorize } from '../middleware/auth.js';
 import { evaluateEligibility } from '../services/eligibilityEngine.js';
-import { generateAdmissionLetterPdf } from '../utils/admissionLetterGenerator.js';
+import { checkAdmissionReadiness } from '../services/admissionReadiness.js';
+import { AdmissionError, approveAdmission, runAdmissionTransaction } from '../services/approveAdmission.js';
 import { logAudit } from '../utils/auditLogger.js';
-import path from 'path';
 
 const router = express.Router();
 
-// Helper to generate readable application number: EV-2026-XXXX
-const generateApplicationNumber = async () => {
-  const count = await Application.countDocuments();
-  const num = String(count + 1001).padStart(5, '0');
-  return `EV-2026-${num}`;
+const editableStatuses = ['Draft', 'Correction Required'];
+const applicationNumber = () => `EV-${new Date().getFullYear()}-${randomBytes(8).toString('hex').toUpperCase()}`;
+
+const sendError = (res, error) => {
+  if (!(error instanceof AdmissionError)) console.error('[Application]', error);
+  return res.status(error instanceof AdmissionError ? error.status : 500).json({
+    success: false, message: error instanceof AdmissionError ? error.message : 'Unable to process the application.',
+    evaluation: error.evaluation,
+  });
 };
 
-// Check Eligibility (Evaluates academic qualifications against course requirements)
-// Eligibility != Accepted Application
-router.post('/check-eligibility', protect, async (req, res) => {
+const loadDocuments = async ({ student, appId, ids, session }) => {
+  if (ids !== undefined && (!Array.isArray(ids) || ids.some((id) => !mongoose.isValidObjectId(id)))) {
+    throw new AdmissionError('Select valid application documents.');
+  }
+  const filter = { student, application: appId ? { $in: [null, appId] } : null };
+  if (ids) filter._id = { $in: ids };
+  const documents = await Document.find(filter).session(session ?? null);
+  if (ids && documents.length !== new Set(ids.map(String)).size) {
+    throw new AdmissionError('Some selected documents are unavailable for this application.');
+  }
+  return documents;
+};
+
+router.post('/check-eligibility', protect, authorize('student'), async (req, res) => {
   try {
-    const { courseId, academic10th, academic12th } = req.body;
+    const { courseId, academic10th, academic12th, academicOnly, personalSnapshot, documentIds, applicationId } = req.body;
     const course = await Course.findById(courseId);
-
-    if (!course) {
-      return res.status(404).json({ success: false, message: 'Course not found' });
-    }
-
-    const documents = await Document.find({ student: req.user._id });
-
-    const result = evaluateEligibility({
-      course,
-      academic10th,
-      academic12th,
-      documents,
-    });
-
-    return res.json({ success: true, evaluation: result, course });
+    if (!course) throw new AdmissionError('Course not found.', 404);
+    const evaluation = academicOnly
+      ? evaluateEligibility({ course, academic10th, academic12th })
+      : await checkAdmissionReadiness({
+        course, academic: { class10: academic10th, class12: academic12th }, personal: personalSnapshot,
+        documents: await loadDocuments({ student: req.user._id, appId: applicationId, ids: documentIds }),
+      });
+    return res.json({ success: true, evaluation, course });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return sendError(res, error);
   }
 });
 
-// Create Application (Draft or Initial Submission)
-router.post('/', protect, authorize('student'), async (req, res) => {
+const saveStudentApplication = async (req, res) => {
+  const appId = req.params.id;
+  const submitting = appId ? req.body.submitNow === true : req.body.isDraft !== true;
   try {
-    const { courseId, personalSnapshot, academicSnapshot, documentIds, isDraft } = req.body;
-
-    const course = await Course.findById(courseId);
-    if (!course) {
-      return res.status(404).json({ success: false, message: 'Course not found' });
-    }
-
-    // Check duplicate applications for the same course (excluding Rejected)
-    const existing = await Application.findOne({
-      student: req.user._id,
-      course: courseId,
-      status: { $ne: 'Rejected' },
-    });
-
-    if (existing) {
-      return res.status(400).json({
-        success: false,
-        message: 'You already have an active application for this course.',
-      });
-    }
-
-    // Determine documents to link
-    let attachedDocIds = [];
-    if (Array.isArray(documentIds) && documentIds.length > 0) {
-      attachedDocIds = documentIds;
-    } else {
-      const studentDocs = await Document.find({ student: req.user._id });
-      attachedDocIds = studentDocs.map((d) => d._id);
-    }
-
-    const attachedDocs = await Document.find({ _id: { $in: attachedDocIds } });
-
-    // Validate mandatory documents if submitting (non-draft)
-    if (!isDraft && course.eligibilityCriteria?.requiredDocuments) {
-      const presentDocTypes = attachedDocs.map((d) => d.docType);
-      const missingMandatory = course.eligibilityCriteria.requiredDocuments.filter(
-        (rd) => rd.isMandatory && !presentDocTypes.includes(rd.docType)
-      );
-
-      if (missingMandatory.length > 0) {
-        return res.status(400).json({
-          success: false,
-          missingDocuments: missingMandatory,
-          message: `Cannot submit application. Missing required document(s): ${missingMandatory
-            .map((m) => m.docName)
-            .join(', ')}. Please upload or import all required documents before submitting.`,
-        });
+    const { courseId, personalSnapshot, academicSnapshot, documentIds } = req.body;
+    const { application, admissionLetter } = await runAdmissionTransaction(async (session, trackFile) => {
+      const student = req.user._id;
+      const current = appId ? await Application.findOne({ _id: appId, student }).session(session) : null;
+      if (appId && !current) throw new AdmissionError('Application not found.', 404);
+      if (current && !editableStatuses.includes(current.status)) {
+        throw new AdmissionError(`This application cannot be edited while its status is ${current.status}.`, 409);
       }
-    }
 
-    // Evaluate eligibility
-    const evalResult = evaluateEligibility({
-      course,
-      academic10th: academicSnapshot?.class10,
-      academic12th: academicSnapshot?.class12,
-      documents: attachedDocs,
-    });
+      const course = await Course.findById(current?.course || courseId).session(session);
+      if (!course) throw new AdmissionError('Course not found.', 404);
+      if (!current) await User.updateOne({ _id: student }, { $inc: { __v: 1 } }, { session });
+      if (!current && await Application.exists({
+        student, course: course._id, status: { $ne: 'Rejected' },
+      }).session(session)) {
+        throw new AdmissionError('You already have an active application for this course.', 409);
+      }
+      const application = current || new Application({ student, course: course._id, applicationNumber: applicationNumber() });
+      if (personalSnapshot) application.personalSnapshot = personalSnapshot;
+      if (academicSnapshot) application.academicSnapshot = academicSnapshot;
 
-    const appNumber = await generateApplicationNumber();
-    const initialStatus = isDraft ? 'Draft' : 'Submitted';
-
-    const application = new Application({
-      applicationNumber: appNumber,
-      student: req.user._id,
-      course: courseId,
-      status: initialStatus,
-      personalSnapshot: personalSnapshot || {},
-      academicSnapshot: academicSnapshot || {},
-      eligibilityEvaluation: {
-        isEligible: evalResult.isEligible,
-        status: evalResult.status || (evalResult.isEligible ? 'Eligible' : 'Not Eligible'),
-        evaluatedAt: new Date(),
-        rulesPassed: evalResult.rulesPassed,
-        rulesFailed: evalResult.rulesFailed,
-        scoreCalculated: evalResult.scoreCalculated,
-        remarks: evalResult.remarks,
-      },
-      documents: attachedDocIds,
-      submittedAt: isDraft ? null : new Date(),
-      statusHistory: [
-        {
-          status: initialStatus,
-          changedBy: req.user._id,
-          changedByRole: 'student',
-          remarks: isDraft ? 'Application saved as draft' : 'Application submitted for officer verification',
-          timestamp: new Date(),
-        },
-      ],
-    });
-
-    await application.save();
-
-    // Link application to documents
-    await Document.updateMany({ _id: { $in: attachedDocIds } }, { application: application._id });
-
-    // Send notification to student
-    if (!isDraft) {
-      await Notification.create({
-        recipient: req.user._id,
-        title: 'Application Submitted',
-        message: `Your application (${appNumber}) for ${course.title} has been submitted and is pending officer verification.`,
-        type: 'info',
-        relatedApplication: application._id,
-        link: `/student/applications/${application._id}`,
+      const documents = await loadDocuments({ student, appId, ids: documentIds ?? current?.documents, session });
+      const evaluation = await checkAdmissionReadiness({
+        course, academic: application.academicSnapshot, personal: application.personalSnapshot, documents, session,
       });
-    }
+      if (submitting && !evaluation.canSubmit) {
+        const problems = [...evaluation.rulesFailed, ...evaluation.blockers];
+        throw new AdmissionError(problems.join(' '), 422, evaluation);
+      }
 
-    await logAudit({
-      user: req.user,
-      action: isDraft ? 'APPLICATION_DRAFTED' : 'APPLICATION_SUBMITTED',
-      entityType: 'Application',
-      entityId: application._id,
-      details: { applicationNumber: appNumber, course: course.code },
-      req,
+      application.documents = documents.map((doc) => doc._id);
+      application.eligibilityEvaluation = { ...evaluation, evaluatedAt: new Date() };
+      await Document.updateMany(
+        { _id: { $in: application.documents } },
+        { $set: { application: application._id }, $inc: { __v: 1 } }, { session }
+      );
+      if (current) {
+        await Document.updateMany(
+          { student, application: application._id, _id: { $nin: application.documents } },
+          { $set: { application: null }, $inc: { __v: 1 } }, { session }
+        );
+      }
+
+      if (!submitting) {
+        if (!current) application.statusHistory.push({
+          status: 'Draft', changedBy: student, changedByRole: 'student', remarks: 'Application saved as draft.',
+        });
+        await application.save({ session });
+        return { application };
+      }
+
+      application.submittedAt = new Date();
+      application.statusHistory.push({
+        status: current?.status === 'Correction Required' ? 'Resubmitted' : 'Submitted',
+        changedBy: student, changedByRole: 'student', remarks: 'Application passed submission validation.',
+      });
+      const admissionLetter = await approveAdmission({
+        application, course, actor: req.user, automatic: true, session, trackFile,
+      });
+      return { application, admissionLetter };
     });
 
-    await application.populate('documents');
-    return res.status(201).json({ success: true, application });
+    await application.populate({ path: 'documents', options: { session: null } });
+    await logAudit({
+      user: req.user, action: submitting ? 'ADMISSION_AUTO_APPROVED' : 'APPLICATION_DRAFTED',
+      entityType: 'Application', entityId: application._id,
+    });
+    return res.status(appId ? 200 : 201).json({ success: true, application, admissionLetter });
   } catch (error) {
-    console.error('[Application POST error]:', error);
-    return res.status(500).json({ success: false, message: error.message });
+    return sendError(res, error);
   }
-});
+};
+
+router.post('/', protect, authorize('student'), saveStudentApplication);
 
 // Get student's applications
 router.get('/my-applications', protect, authorize('student'), async (req, res) => {
@@ -255,103 +217,7 @@ router.get('/:id', protect, async (req, res) => {
   }
 });
 
-// Student: Update/Resubmit application or correct documents
-router.put('/:id', protect, authorize('student'), async (req, res) => {
-  try {
-    const application = await Application.findById(req.params.id);
-    if (!application) {
-      return res.status(404).json({ success: false, message: 'Application not found' });
-    }
-
-    if (String(application.student) !== String(req.user._id)) {
-      return res.status(403).json({ success: false, message: 'Unauthorized' });
-    }
-
-    // Block changes if already Accepted or Rejected
-    if (['Accepted', 'Rejected'].includes(application.status)) {
-      return res.status(400).json({
-        success: false,
-        message: `Application cannot be modified once it is ${application.status}.`,
-      });
-    }
-
-    const { personalSnapshot, academicSnapshot, documentIds, submitNow } = req.body;
-
-    if (personalSnapshot) application.personalSnapshot = personalSnapshot;
-    if (academicSnapshot) application.academicSnapshot = academicSnapshot;
-
-    if (Array.isArray(documentIds)) {
-      application.documents = documentIds;
-    }
-
-    const studentDocs = await Document.find({ _id: { $in: application.documents } });
-    const course = await Course.findById(application.course);
-
-    // If submitting/resubmitting, enforce mandatory document presence
-    if (submitNow && course.eligibilityCriteria?.requiredDocuments) {
-      const presentDocTypes = studentDocs.map((d) => d.docType);
-      const missingMandatory = course.eligibilityCriteria.requiredDocuments.filter(
-        (rd) => rd.isMandatory && !presentDocTypes.includes(rd.docType)
-      );
-
-      if (missingMandatory.length > 0) {
-        return res.status(400).json({
-          success: false,
-          missingDocuments: missingMandatory,
-          message: `Cannot submit application. Missing required document(s): ${missingMandatory
-            .map((m) => m.docName)
-            .join(', ')}.`,
-        });
-      }
-    }
-
-    // Re-evaluate eligibility
-    const evalResult = evaluateEligibility({
-      course,
-      academic10th: application.academicSnapshot?.class10,
-      academic12th: application.academicSnapshot?.class12,
-      documents: studentDocs,
-    });
-
-    application.eligibilityEvaluation = {
-      isEligible: evalResult.isEligible,
-      status: evalResult.status || (evalResult.isEligible ? 'Eligible' : 'Not Eligible'),
-      evaluatedAt: new Date(),
-      rulesPassed: evalResult.rulesPassed,
-      rulesFailed: evalResult.rulesFailed,
-      scoreCalculated: evalResult.scoreCalculated,
-      remarks: evalResult.remarks,
-    };
-
-    if (submitNow) {
-      // After student resubmission, status returns to Pending Verification
-      const nextStatus = 'Pending Verification';
-      application.status = nextStatus;
-      application.submittedAt = new Date();
-      application.statusHistory.push({
-        status: nextStatus,
-        changedBy: req.user._id,
-        changedByRole: 'student',
-        remarks: 'Applicant submitted updated information and documents for verification.',
-        timestamp: new Date(),
-      });
-
-      await Notification.create({
-        recipient: req.user._id,
-        title: 'Application Resubmitted',
-        message: `Your application (${application.applicationNumber}) has been resubmitted and is pending verification.`,
-        type: 'info',
-        relatedApplication: application._id,
-      });
-    }
-
-    await application.save();
-    await application.populate('documents');
-    return res.json({ success: true, message: 'Application updated successfully', application });
-  } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
-  }
-});
+router.put('/:id', protect, authorize('student'), saveStudentApplication);
 
 // Admin: Request Correction or Reject
 router.patch('/:id/decision', protect, authorize('admin'), async (req, res) => {
@@ -361,6 +227,10 @@ router.patch('/:id/decision', protect, authorize('admin'), async (req, res) => {
 
     if (!application) {
       return res.status(404).json({ success: false, message: 'Application not found' });
+    }
+
+    if (['Accepted', 'Rejected'].includes(application.status)) {
+      return res.status(409).json({ success: false, message: 'This application already has a final decision.' });
     }
 
     if (action === 'accept') {
@@ -430,191 +300,43 @@ router.patch('/:id/decision', protect, authorize('admin'), async (req, res) => {
   }
 });
 
-// Final Admin Admission Approval
-// Enforces:
-// 1. All mandatory documents submitted
-// 2. All mandatory documents manually verified (status === 'Verified')
-// 3. Student satisfies configured eligibility requirements (isEligible === true)
-// 4. No unresolved discrepancies
-// 5. Course seat available
-// 6. Safe atomic seat allocation & Admission Letter generation
+// Admin approval for applications already in the review queue.
 router.post('/:id/accept', protect, authorize('admin'), async (req, res) => {
   try {
-    const { remarks } = req.body;
-    const application = await Application.findById(req.params.id)
-      .populate('course')
-      .populate('student')
-      .populate('documents');
-
-    if (!application) {
-      return res.status(404).json({ success: false, message: 'Application not found' });
-    }
-
-    if (application.status === 'Accepted') {
-      return res.status(400).json({
-        success: false,
-        message: 'This application has already been accepted.',
-      });
-    }
-
-    const course = await Course.findById(application.course._id);
-    if (!course) {
-      return res.status(404).json({ success: false, message: 'Associated course not found' });
-    }
-
-    // 1. Check Course Seat Capacity
-    if (course.allocatedSeats >= course.totalSeats) {
-      return res.status(400).json({
-        success: false,
-        message: `Cannot accept application. Course capacity (${course.totalSeats} seats) is fully exhausted.`,
-      });
-    }
-
-    // 2. Check Eligibility Engine Result
-    const studentDocs = application.documents || [];
-    const evalResult = evaluateEligibility({
-      course,
-      academic10th: application.academicSnapshot?.class10,
-      academic12th: application.academicSnapshot?.class12,
-      documents: studentDocs,
-    });
-
-    if (!evalResult.isEligible) {
-      return res.status(400).json({
-        success: false,
-        message: `Cannot accept application. Candidate fails eligibility requirements: ${evalResult.rulesFailed.join(
-          '; '
-        )}`,
-      });
-    }
-
-    // 3. Check All Mandatory Documents are Present & Verified
-    const reqDocConfigs = course.eligibilityCriteria?.requiredDocuments || [];
-    const missingMandatoryDocs = [];
-    const unverifiedMandatoryDocs = [];
-
-    for (const reqDoc of reqDocConfigs) {
-      if (reqDoc.isMandatory) {
-        const found = studentDocs.find((d) => d.docType === reqDoc.docType);
-        if (!found) {
-          missingMandatoryDocs.push(reqDoc.docName);
-        } else if (found.verificationStatus !== 'Verified') {
-          unverifiedMandatoryDocs.push(`${reqDoc.docName} (Current Status: ${found.verificationStatus})`);
-        }
+    const result = await runAdmissionTransaction(async (session, trackFile) => {
+      const application = await Application.findById(req.params.id).session(session);
+      if (!application) throw new AdmissionError('Application not found.', 404);
+      if (!['Submitted', 'Pending Verification', 'Resubmitted'].includes(application.status)) {
+        throw new AdmissionError(`Cannot approve an application with status ${application.status}.`, 409);
       }
-    }
-
-    if (missingMandatoryDocs.length > 0) {
-      return res.status(400).json({
-        success: false,
-        message: `Cannot accept application. Missing mandatory documents: ${missingMandatoryDocs.join(', ')}`,
+      const course = await Course.findById(application.course).session(session);
+      if (!course) throw new AdmissionError('Course not found.', 404);
+      const documents = await loadDocuments({
+        student: application.student, appId: application._id, ids: application.documents, session,
       });
-    }
-
-    if (unverifiedMandatoryDocs.length > 0) {
-      return res.status(400).json({
-        success: false,
-        message: `Cannot accept application. All mandatory documents must be individually verified by an officer first. Pending: ${unverifiedMandatoryDocs.join(
-          ', '
-        )}`,
+      const evaluation = evaluateEligibility({
+        course, academic10th: application.academicSnapshot?.class10,
+        academic12th: application.academicSnapshot?.class12, documents,
       });
-    }
-
-    // 4. Check for Unresolved Discrepancies on Attached Documents
-    const unresolvedDiscrepancyDocs = studentDocs.filter(
-      (d) => d.extractedData?.isMismatched && d.verificationStatus !== 'Verified'
-    );
-    if (unresolvedDiscrepancyDocs.length > 0) {
-      return res.status(400).json({
-        success: false,
-        message: `Cannot accept application. Unresolved discrepancies flagged on: ${unresolvedDiscrepancyDocs
-          .map((d) => d.title)
-          .join(', ')}`,
+      if (!evaluation.isEligible) throw new AdmissionError(evaluation.rulesFailed.join(' '));
+      const unverified = (course.eligibilityCriteria?.requiredDocuments || []).filter((required) =>
+        required.isMandatory && !documents.some((doc) => doc.docType === required.docType && doc.verificationStatus === 'Verified')
+      );
+      if (unverified.length) throw new AdmissionError(`Verify required documents first: ${unverified.map((doc) => doc.docName).join(', ')}.`);
+      if (documents.some((doc) => doc.extractedData?.isMismatched && doc.verificationStatus !== 'Verified')) {
+        throw new AdmissionError('Resolve document mismatches before approving this application.');
+      }
+      await Document.updateMany({ _id: { $in: application.documents } }, { $inc: { __v: 1 } }, { session });
+      application.eligibilityEvaluation = { ...evaluation, evaluatedAt: new Date() };
+      const admissionLetter = await approveAdmission({
+        application, course, actor: req.user, remarks: req.body.remarks, session, trackFile,
       });
-    }
-
-    // Atomic seat allocation
-    course.allocatedSeats += 1;
-    await course.save();
-
-    // Update Application Status to Accepted
-    application.status = 'Accepted';
-    application.officerRemarks = remarks || 'All mandatory documents verified and criteria satisfied.';
-    application.assignedOfficer = req.user._id;
-    application.decidedAt = new Date();
-    application.statusHistory.push({
-      status: 'Accepted',
-      changedBy: req.user._id,
-      changedByRole: req.user.role,
-      remarks: remarks || 'Final admission approved. Seat reserved and Admission Letter generated.',
-      timestamp: new Date(),
+      return { application, admissionLetter };
     });
-    await application.save();
-
-    // Generate Unique Admission Reference ID
-    const countLetters = await AdmissionLetter.countDocuments();
-    const admissionId = `SJ-2026-ADM-${String(countLetters + 101).padStart(4, '0')}`;
-    const verificationToken = `token_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-
-    const publicUrl = `${process.env.CLIENT_URL || 'http://localhost:5173'}/verify-admission/${admissionId}?token=${verificationToken}`;
-
-    const pdfFilename = `admission-letter-${admissionId}.pdf`;
-    const pdfOutputPath = path.join(process.cwd(), 'uploads', 'letters', pdfFilename);
-
-    await generateAdmissionLetterPdf({
-      admissionId,
-      studentName: application.personalSnapshot?.fullName || application.student.name,
-      applicationNumber: application.applicationNumber,
-      courseTitle: course.title,
-      courseCode: course.code,
-      departmentName: 'Department of Computing & Advanced Sciences',
-      academicSession: '2026-2027',
-      issueDate: new Date(),
-      verificationUrl: publicUrl,
-      outputPath: pdfOutputPath,
-    });
-
-    const admissionLetter = await AdmissionLetter.create({
-      admissionId,
-      application: application._id,
-      student: application.student._id,
-      course: course._id,
-      academicSession: '2026-2027',
-      issuedDate: new Date(),
-      pdfPath: `/uploads/letters/${pdfFilename}`,
-      qrCodeData: publicUrl,
-      verificationToken,
-      isValid: true,
-    });
-
-    // Notify student of final decision
-    await Notification.create({
-      recipient: application.student._id,
-      title: 'Admission Offer Accepted!',
-      message: `Congratulations! Your admission to ${course.title} has been accepted. Your Admission Letter (${admissionId}) is ready for download.`,
-      type: 'success',
-      relatedApplication: application._id,
-      link: `/student/letters`,
-    });
-
-    await logAudit({
-      user: req.user,
-      action: 'ADMISSION_ACCEPTED',
-      entityType: 'Application',
-      entityId: application._id,
-      details: { admissionId, course: course.code, student: application.student.email },
-      req,
-    });
-
-    return res.json({
-      success: true,
-      message: 'Application accepted! Seat allocated and admission letter generated.',
-      application,
-      admissionLetter,
-    });
+    await logAudit({ user: req.user, action: 'ADMISSION_ACCEPTED', entityType: 'Application', entityId: result.application._id });
+    return res.json({ success: true, message: 'Application accepted. Admission letter generated.', ...result });
   } catch (error) {
-    console.error('[Accept Application Error]:', error);
-    return res.status(500).json({ success: false, message: error.message });
+    return sendError(res, error);
   }
 });
 
