@@ -1,8 +1,21 @@
-# EduVerify — Admission Process Automation System
+# EduVerify: Admission Process Automation System
 
 An admissions and academic document verification demo for ABES Engineering College, Ghaziabad.
 
 [Live Render deployment](https://eduverify-p26x.onrender.com/)
+
+## 🔐 Pre-Configured Demo Credentials
+
+Use these demo accounts on the [Render sign-in page](https://eduverify-p26x.onrender.com/login).
+
+| Role | Username | Password |
+| :--- | :--- | :--- |
+| **Administrator** | `admin@eduverify.ac.in` | `AdminPassword123!` |
+| **Student Applicant** | `student@eduverify.ac.in` | `StudentPassword123!` |
+
+*(Prospective students can also click **Apply Now** on the homepage to register new accounts).*
+
+---
 
 EduVerify eliminates paper-intensive scrutiny, slow manual evaluations, and fraudulent qualifications through:
 1. **Simulated DigiLocker Document Integration** with automated academic marks population.
@@ -72,19 +85,6 @@ The platform enforces clean, role-based access control across two distinct porta
 | :--- | :--- | :--- |
 | **Student** | `/student/*` | Browse courses, connect to DigiLocker Demo or upload manually, auto-populate marks, fill complete personal & address records, check eligibility, save drafts, track application lifecycle, respond to correction requests with remarks, and download demo admission letters. |
 | **Admin** | `/admin/*` | Full institutional oversight: view real-time database dashboard statistics, manage course offerings and eligibility cutoffs, scrutinize incoming applications, preview uploaded certificates & OCR extractions, verify/reject documents, request corrections, make final admission decisions, and monitor seat quotas. |
-
----
-
-## 🔐 Pre-Configured Demo Credentials
-
-Use these demo accounts on the [Render sign-in page](https://eduverify-p26x.onrender.com/login).
-
-| Role | Username | Password |
-| :--- | :--- | :--- |
-| **Administrator** | `admin@eduverify.ac.in` | `AdminPassword123!` |
-| **Student Applicant** | `student@eduverify.ac.in` | `StudentPassword123!` |
-
-*(Prospective students can also click **Apply Now** on the homepage to register new accounts).*
 
 ---
 
