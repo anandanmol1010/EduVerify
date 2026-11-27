@@ -16,8 +16,8 @@ const eligibilityRulesSchema = new mongoose.Schema(
     },
     requiredSubjects: [
       {
-        subjectName: { type: String, required: true },
-        minMarks: { type: Number, default: 40 },
+        subjectName: { type: String, required: true, trim: true },
+        minMarks: { type: Number, default: 40, min: 0, max: 100 },
         isMandatory: { type: Boolean, default: true },
       },
     ],
@@ -48,6 +48,8 @@ const eligibilityRulesSchema = new mongoose.Schema(
     maxBacklogsAllowed: {
       type: Number,
       default: 0,
+      min: 0,
+      validate: Number.isInteger,
     },
     specialInstructions: {
       type: String,

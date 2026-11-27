@@ -73,8 +73,8 @@ export default function CourseManagementPage() {
       totalSeats: course.totalSeats,
       annualFee: course.annualFee,
       description: course.description,
-      minClass10Percentage: course.eligibilityCriteria?.minClass10Percentage || 50,
-      minClass12Percentage: course.eligibilityCriteria?.minClass12Percentage || 55,
+      minClass10Percentage: course.eligibilityCriteria?.minClass10Percentage ?? 50,
+      minClass12Percentage: course.eligibilityCriteria?.minClass12Percentage ?? 55,
       requiredSubjectsStr: subStr,
     });
     setShowModal(true);
@@ -83,17 +83,20 @@ export default function CourseManagementPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Parse subjects string e.g. "Math:50, Physics:50"
+    const existingCriteria = editingCourse?.eligibilityCriteria;
     const parsedSubjects = formData.requiredSubjectsStr
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean)
       .map((s) => {
-        const parts = s.split(':');
+        const [name, threshold] = s.split(':').map((part) => part.trim());
+        const existing = existingCriteria?.requiredSubjects?.find((subject) =>
+          subject.subjectName.trim().toLowerCase() === name.toLowerCase()
+        );
         return {
-          subjectName: parts[0]?.trim(),
-          minMarks: Number(parts[1] || 40),
-          isMandatory: true,
+          subjectName: name,
+          minMarks: Number(threshold || 40),
+          isMandatory: existing?.isMandatory ?? true,
         };
       });
 
@@ -107,10 +110,11 @@ export default function CourseManagementPage() {
       annualFee: Number(formData.annualFee),
       description: formData.description,
       eligibilityCriteria: {
+        ...existingCriteria,
         minClass10Percentage: Number(formData.minClass10Percentage),
         minClass12Percentage: Number(formData.minClass12Percentage),
         requiredSubjects: parsedSubjects,
-        requiredDocuments: [
+        requiredDocuments: existingCriteria?.requiredDocuments ?? [
           { docType: 'class10_marksheet', docName: 'Class 10th Marksheet', isMandatory: true },
           { docType: 'class12_marksheet', docName: 'Class 12th Marksheet', isMandatory: true },
         ],

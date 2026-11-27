@@ -122,6 +122,7 @@ const applicationSchema = new mongoose.Schema(
         subjects: Array,
       },
       class12: {
+        backlogs: { type: Number, min: 0, validate: Number.isInteger },
         board: { type: String, default: '' },
         schoolName: { type: String, default: '' },
         rollNumber: { type: String, default: '' },

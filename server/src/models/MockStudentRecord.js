@@ -89,6 +89,7 @@ const mockStudentRecordSchema = new mongoose.Schema(
       percentage: Number,
     },
     class12: {
+      backlogs: { type: Number, min: 0, validate: Number.isInteger },
       schoolName: { type: String, default: '' },
       rollNumber: String,
       passingYear: Number,

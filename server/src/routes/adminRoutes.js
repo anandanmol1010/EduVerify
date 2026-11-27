@@ -15,7 +15,7 @@ const router = express.Router();
  */
 router.get('/dashboard-stats', protect, authorize('admin'), async (req, res) => {
   try {
-    const totalApplications = await Application.countDocuments();
+    const totalApplications = await Application.countDocuments({ status: { $ne: 'Draft' } });
     const pendingCount = await Application.countDocuments({
       status: { $in: ['Submitted', 'Pending Verification', 'Resubmitted', 'Under Review'] },
     });
@@ -36,7 +36,7 @@ router.get('/dashboard-stats', protect, authorize('admin'), async (req, res) => 
     const totalAvailableSeats = Math.max(0, totalSeats - totalAllocated);
 
     // Recent 10 applications with candidate details
-    const recentApplications = await Application.find()
+    const recentApplications = await Application.find({ status: { $ne: 'Draft' } })
       .populate('course', 'title code')
       .populate('student', 'name email')
       .sort({ createdAt: -1 })

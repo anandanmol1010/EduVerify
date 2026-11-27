@@ -27,6 +27,7 @@ export const mapDigiLockerAcademicData = (importedDetails, currentAcademic = {})
       percentage: record.percentage,
       schoolName: record.schoolName,
       stream: record.stream,
+      backlogs: record.backlogs,
     })) {
       if (hasValue(value)) {
         updated[field] = value;

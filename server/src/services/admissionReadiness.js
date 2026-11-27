@@ -1,4 +1,6 @@
 import { MockStudentRecord } from '../models/MockStudentRecord.js';
+import { AdmissionSetting } from '../models/AdmissionSetting.js';
+import { Application } from '../models/Application.js';
 import { evaluateEligibility } from './eligibilityEngine.js';
 import { detectDataMismatches } from './ocrService.js';
 
@@ -15,7 +17,7 @@ const compareMarksheet = (record, key, entered, issues) => {
   for (const [field, value] of Object.entries({
     board: record.board, rollNumber: official.rollNumber || record.rollNumber,
     passingYear: official.passingYear, percentage: official.percentage,
-    schoolName: official.schoolName, stream: official.stream,
+    schoolName: official.schoolName, stream: official.stream, backlogs: official.backlogs,
   })) {
     if (value != null && value !== '' && normalize(entered?.[field]) !== normalize(value)) {
       issues.add(`${label}: ${field.replace(/([A-Z])/g, ' $1').toLowerCase()} differs from DigiLocker.`);
@@ -27,13 +29,55 @@ const compareMarksheet = (record, key, entered, issues) => {
   }
 };
 
-export const checkAdmissionReadiness = async ({ course, academic, personal, documents, session }) => {
+const applicationBlockers = async ({ course, student, applicationId, session }) => {
+  const issues = [];
+  const settings = await AdmissionSetting.findOne().session(session ?? null);
+  const today = dateOnly(new Date());
+  if (settings?.isPortalOpen === false) issues.push('The admissions portal is closed.');
+  if (settings?.admissionStartDate && today < dateOnly(settings.admissionStartDate)) {
+    issues.push('The admissions window has not opened yet.');
+  }
+  if (settings?.admissionEndDate && today > dateOnly(settings.admissionEndDate)) {
+    issues.push('The admissions deadline has passed.');
+  }
+  if (course.status !== 'open') issues.push('This course is closed for applications.');
+  if (course.admissionStartDate && today < dateOnly(course.admissionStartDate)) {
+    issues.push('Applications for this course have not opened yet.');
+  }
+  if (course.admissionEndDate && today > dateOnly(course.admissionEndDate)) {
+    issues.push('The application deadline for this course has passed.');
+  }
+  if (course.allocatedSeats >= course.totalSeats) issues.push('This course has no available seats.');
+
+  const otherApplications = { student, ...(applicationId ? { _id: { $ne: applicationId } } : {}) };
+  if (await Application.exists({ ...otherApplications, course: course._id, status: { $ne: 'Rejected' } }).session(session ?? null)) {
+    issues.push('You already have an active application for this course.');
+  }
+  if (Number.isInteger(settings?.maxApplicationsPerStudent) && settings.maxApplicationsPerStudent >= 0) {
+    const active = await Application.countDocuments({
+      ...otherApplications, status: { $nin: ['Draft', 'Rejected'] },
+    }).session(session ?? null);
+    if (active >= settings.maxApplicationsPerStudent) issues.push(
+      settings.maxApplicationsPerStudent === 0
+        ? 'New applications are disabled by the admissions office.'
+        : `You already have the maximum of ${settings.maxApplicationsPerStudent} active applications.`
+    );
+  }
+  return issues;
+};
+
+export const checkAdmissionReadiness = async ({
+  course, academic, personal, documents = [], student, applicationId, academicOnly = false, session,
+}) => {
   const eligibility = evaluateEligibility({
     course, academic10th: academic?.class10, academic12th: academic?.class12,
   });
-  const issues = new Set();
+  const issues = new Set(await applicationBlockers({ course, student, applicationId, session }));
+  if (academicOnly) {
+    return { ...eligibility, blockers: [...issues], canContinue: eligibility.isEligible && issues.size === 0 };
+  }
   const required = new Map((course.eligibilityCriteria?.requiredDocuments || [])
-    .filter((doc) => doc.isMandatory).map((doc) => [doc.docType, doc.docName]));
+    .filter((doc) => doc.isMandatory !== false).map((doc) => [doc.docType, doc.docName]));
   for (const [type, title] of [
     ['class10_marksheet', 'Class 10 marksheet'], ['class12_marksheet', 'Class 12 marksheet'],
     ['aadhaar_card', 'Aadhaar Demo Identity Document'],
@@ -110,8 +154,5 @@ export const checkAdmissionReadiness = async ({ course, academic, personal, docu
   for (const [type, title] of required) {
     if (!documents.some((doc) => doc.docType === type)) issues.add(`Missing required document: ${title}.`);
   }
-  if (course.status !== 'open') issues.add('This course is closed for applications.');
-  else if (course.allocatedSeats >= course.totalSeats) issues.add('This course has no available seats.');
-
   return { ...eligibility, blockers: [...issues], canSubmit: eligibility.isEligible && issues.size === 0 };
 };

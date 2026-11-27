@@ -25,6 +25,8 @@ const admissionSettingSchema = new mongoose.Schema(
     maxApplicationsPerStudent: {
       type: Number,
       default: 3,
+      min: 0,
+      validate: Number.isInteger,
     },
     supportEmail: {
       type: String,

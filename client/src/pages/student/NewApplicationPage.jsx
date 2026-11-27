@@ -28,6 +28,17 @@ import {
   computeAcademicProgress,
 } from '../../services/documentMapper';
 
+function ApplicationBlockers({ reasons }) {
+  return (
+    <div className="p-3 rounded border border-rose-200 bg-rose-50 text-xs text-rose-900" role="alert">
+      <h3 className="font-bold">You can’t apply</h3>
+      <ul className="mt-1 list-disc list-inside space-y-1">
+        {reasons.map((reason) => <li key={reason}>{reason}</li>)}
+      </ul>
+    </div>
+  );
+}
+
 export default function NewApplicationPage() {
   const { key } = useLocation();
   return <ApplicationForm key={key} />;
@@ -46,6 +57,7 @@ function ApplicationForm() {
   const [validationErrors, setValidationErrors] = useState({});
   const [isDigiLockerOpen, setIsDigiLockerOpen] = useState(false);
   const [evaluation, setEvaluation] = useState(null);
+  const [reviewedSnapshot, setReviewedSnapshot] = useState(null);
   const currentAppId = existingAppId || undefined;
   const [workspaceId] = useState(() => crypto.randomUUID());
   const documentParams = currentAppId ? { applicationId: currentAppId } : { workspaceId };
@@ -491,15 +503,23 @@ function ApplicationForm() {
     (doc) => doc.isMandatory && checklistDocuments.some((attached) => attached.docType === doc.docType)
   ).length;
   const missingMandatoryCount = mandatoryCount - submittedMandatoryCount;
+  const snapshot = JSON.stringify({
+    course: selectedCourse?._id, academic, personal,
+    documents: checklistDocuments.map(({ _id, updatedAt }) => [_id, updatedAt]),
+  });
+  const currentEvaluation = reviewedSnapshot === snapshot ? evaluation : null;
+  const reasons = [...(currentEvaluation?.rulesFailed || []), ...(currentEvaluation?.blockers || [])];
+  const canSubmit = currentEvaluation?.canSubmit === true;
 
   const handleCheckEligibility = async (academicOnly = false) => {
     if (!selectedCourse) return;
+    setEvaluation(null);
+    setReviewedSnapshot(null);
     if (academicOnly && !validateStage2()) {
       setError('Please fill in all mandatory Class 10 and Class 12 academic fields.');
       return;
     }
     setLoading(true);
-    setEvaluation(null);
     setError('');
 
     try {
@@ -512,13 +532,10 @@ function ApplicationForm() {
         ...documentParams,
         documentIds: checklistDocuments.map((doc) => doc._id),
       });
-      if (academicOnly) {
-        if (res.evaluation.isEligible) setStep(3);
-        else setError(`Academic eligibility: ${res.evaluation.status}. ${res.evaluation.rulesFailed.join(' ')}`);
-      } else {
-        setEvaluation(res.evaluation);
-        setStep(4);
-      }
+      setEvaluation(res.evaluation);
+      setReviewedSnapshot(snapshot);
+      if (!academicOnly) setStep(4);
+      else if (res.evaluation.canContinue) setStep(3);
     } catch (err) {
       setError(err.message || 'Error running eligibility check');
     } finally {
@@ -531,7 +548,7 @@ function ApplicationForm() {
     setLoading(true);
     setError('');
 
-    if (!isDraft && !evaluation?.canSubmit) {
+    if (!isDraft && !canSubmit) {
       setLoading(false);
       setError('Resolve the eligibility and document issues before submitting.');
       return;
@@ -561,8 +578,9 @@ function ApplicationForm() {
         navigate(`/student/applications/${res.application?._id || currentAppId}`);
       }
     } catch (err) {
-      if (err.evaluation) setEvaluation(err.evaluation);
-      setError(err.message || 'Failed to submit admission application.');
+      setEvaluation(err.evaluation || null);
+      setReviewedSnapshot(err.evaluation ? snapshot : null);
+      if (!err.evaluation) setError(err.message || 'Failed to submit admission application.');
     } finally {
       setLoading(false);
     }
@@ -1781,6 +1799,7 @@ function ApplicationForm() {
             </p>
 
             {/* Step 2 Actions */}
+            {reasons.length > 0 && <ApplicationBlockers reasons={reasons} />}
             <div className="flex justify-between pt-4 border-t border-[#ECEBE4]">
               <button
                 type="button"
@@ -1976,7 +1995,7 @@ function ApplicationForm() {
             </h2>
 
             {/* Evaluation Results Card */}
-            {evaluation && (
+            {currentEvaluation && (
               <div
                 className={`p-4 rounded border text-xs space-y-3 ${
                   evaluation.status === 'Incomplete'
@@ -2021,16 +2040,6 @@ function ApplicationForm() {
                     </div>
                   )}
 
-                  {evaluation.rulesFailed?.length > 0 && (
-                    <div className="text-[11px] text-rose-900">
-                      <strong>Missing / Failed Conditions:</strong>
-                      <ul className="list-disc list-inside mt-0.5 space-y-0.5">
-                        {evaluation.rulesFailed.map((r, i) => (
-                          <li key={i}>{r}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
                 </div>
               </div>
             )}
@@ -2041,15 +2050,10 @@ function ApplicationForm() {
               </div>
             )}
 
-            {evaluation?.blockers?.length > 0 && (
-              <div className="p-3 rounded border border-rose-200 bg-rose-50 text-xs text-rose-900" role="alert">
-                <h3 className="font-bold">Resolve these issues before submitting</h3>
-                <ul className="mt-1 list-disc list-inside space-y-1">
-                  {evaluation.blockers.map((issue) => <li key={issue}>{issue}</li>)}
-                </ul>
-              </div>
+            {!canSubmit && (
+              <ApplicationBlockers reasons={reasons.length ? reasons : ['Review your current details and run the eligibility check again.']} />
             )}
-            {evaluation?.canSubmit && (
+            {canSubmit && (
               <p className="p-3 rounded border border-emerald-200 bg-emerald-50 text-xs text-emerald-900">
                 Your marks and documents meet the requirements. Submitting will approve your admission and issue your letter.
               </p>
@@ -2107,10 +2111,10 @@ function ApplicationForm() {
                 <button
                   type="button"
                   onClick={() => handleSubmitApplication(false)}
-                  disabled={loading || !evaluation?.canSubmit}
+                  disabled={loading || !canSubmit}
                   className="px-5 py-2.5 bg-[#254D3C] text-white text-xs font-semibold rounded hover:bg-[#1c3b2e] shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {loading ? 'Submitting...' : 'Submit Application'}
+                  {loading ? 'Submitting...' : canSubmit ? 'Submit Application' : 'Can’t Apply'}
                 </button>
               </div>
             </div>

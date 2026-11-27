@@ -84,6 +84,7 @@ export default function AdminSettingsPage() {
               <label className="block font-semibold mb-1 text-[#252824]">Max Applications Allowed per Student</label>
               <input
                 type="number"
+                min="0"
                 value={settings.maxApplicationsPerStudent}
                 onChange={(e) => setSettings({ ...settings, maxApplicationsPerStudent: Number(e.target.value) })}
                 className="w-full p-2 border border-[#DDDCD5] rounded bg-[#F7F6F2]"

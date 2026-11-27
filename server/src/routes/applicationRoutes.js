@@ -50,14 +50,17 @@ const loadDocuments = async ({ student, appId, workspaceId, ids, session }) => {
 router.post('/check-eligibility', protect, authorize('student'), async (req, res) => {
   try {
     const { courseId, academic10th, academic12th, academicOnly, personalSnapshot, documentIds, applicationId, workspaceId } = req.body;
-    const course = await Course.findById(courseId);
+    const current = applicationId ? await Application.findOne({ _id: applicationId, student: req.user._id }) : null;
+    if (applicationId && !current) throw new AdmissionError('Application not found.', 404);
+    const course = await Course.findById(current?.course || courseId);
     if (!course) throw new AdmissionError('Course not found.', 404);
-    const evaluation = academicOnly
-      ? evaluateEligibility({ course, academic10th, academic12th })
-      : await checkAdmissionReadiness({
-        course, academic: { class10: academic10th, class12: academic12th }, personal: personalSnapshot,
-        documents: await loadDocuments({ student: req.user._id, appId: applicationId, workspaceId, ids: documentIds }),
-      });
+    const evaluation = await checkAdmissionReadiness({
+      course, academic: { class10: academic10th, class12: academic12th }, personal: personalSnapshot,
+      student: req.user._id, applicationId, academicOnly: academicOnly === true,
+      documents: academicOnly === true ? [] : await loadDocuments({
+        student: req.user._id, appId: applicationId, workspaceId, ids: documentIds,
+      }),
+    });
     return res.json({ success: true, evaluation, course });
   } catch (error) {
     return sendError(res, error);
@@ -79,8 +82,8 @@ const saveStudentApplication = async (req, res) => {
 
       const course = await Course.findById(current?.course || courseId).session(session);
       if (!course) throw new AdmissionError('Course not found.', 404);
-      if (!current) await User.updateOne({ _id: student }, { $inc: { __v: 1 } }, { session });
-      if (!current && await Application.exists({
+      if (submitting || !current) await User.updateOne({ _id: student }, { $inc: { __v: 1 } }, { session });
+      if (!submitting && !current && await Application.exists({
         student, course: course._id, status: { $ne: 'Rejected' },
       }).session(session)) {
         throw new AdmissionError('You already have an active application for this course.', 409);
@@ -91,7 +94,8 @@ const saveStudentApplication = async (req, res) => {
 
       const documents = await loadDocuments({ student, appId, workspaceId, ids: documentIds ?? current?.documents, session });
       const evaluation = await checkAdmissionReadiness({
-        course, academic: application.academicSnapshot, personal: application.personalSnapshot, documents, session,
+        course, academic: application.academicSnapshot, personal: application.personalSnapshot, documents,
+        student, applicationId: appId, session,
       });
       if (submitting && !evaluation.canSubmit) {
         const problems = [...evaluation.rulesFailed, ...evaluation.blockers];
@@ -161,7 +165,8 @@ router.get('/my-applications', protect, authorize('student'), async (req, res) =
 router.get('/', protect, authorize('admin'), async (req, res) => {
   try {
     const { status, course, search, page = 1, limit = 20 } = req.query;
-    const query = {};
+    if (status === 'Draft') return res.json({ success: true, total: 0, page: Number(page), pages: 0, applications: [] });
+    const query = { status: { $ne: 'Draft' } };
 
     if (status && status !== 'all') {
       query.status = status;
@@ -211,7 +216,7 @@ router.get('/:id', protect, async (req, res) => {
       .populate('assignedOfficer', 'name email')
       .populate('statusHistory.changedBy', 'name role');
 
-    if (!application) {
+    if (!application || (req.user.role === 'admin' && application.status === 'Draft')) {
       return res.status(404).json({ success: false, message: 'Application not found' });
     }
 
@@ -234,7 +239,7 @@ router.patch('/:id/decision', protect, authorize('admin'), async (req, res) => {
     const { action, remarks } = req.body; // 'request_correction', 'reject', 'mark_under_review'
     const application = await Application.findById(req.params.id).populate('course');
 
-    if (!application) {
+    if (!application || application.status === 'Draft') {
       return res.status(404).json({ success: false, message: 'Application not found' });
     }
 
@@ -314,7 +319,7 @@ router.post('/:id/accept', protect, authorize('admin'), async (req, res) => {
   try {
     const result = await runAdmissionTransaction(async (session, trackFile) => {
       const application = await Application.findById(req.params.id).session(session);
-      if (!application) throw new AdmissionError('Application not found.', 404);
+      if (!application || application.status === 'Draft') throw new AdmissionError('Application not found.', 404);
       if (!['Submitted', 'Pending Verification', 'Resubmitted'].includes(application.status)) {
         throw new AdmissionError(`Cannot approve an application with status ${application.status}.`, 409);
       }
