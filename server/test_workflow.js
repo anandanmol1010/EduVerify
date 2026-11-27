@@ -1,3 +1,4 @@
+import './src/config/db.js';
 import fetch from 'node-fetch';
 
 const BASE_URL = 'http://localhost:5000/api';
@@ -12,7 +13,7 @@ async function runTests() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       email: 'student@eduverify.ac.in',
-      password: 'StudentPassword123!',
+      password: process.env.SEED_STUDENT_PASSWORD,
     }),
   });
   const studentLogin = await studentLoginRes.json();

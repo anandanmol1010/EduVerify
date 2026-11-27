@@ -1,3 +1,4 @@
+import '../config/db.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -39,7 +40,7 @@ async function runComprehensiveTest() {
     console.log('[Setup] Logging in Admin, Officer, and creating Test Students...');
     const adminLogin = await req('/auth/login', {
       method: 'POST',
-      body: { email: 'admin@eduverify.ac.in', password: 'AdminPassword123!' },
+      body: { email: 'admin@eduverify.ac.in', password: process.env.SEED_ADMIN_PASSWORD },
     });
     assert(adminLogin.ok, 'Admin login failed');
     const adminToken = adminLogin.data.token;

@@ -1,3 +1,4 @@
+import './src/config/db.js';
 import fetch from 'node-fetch';
 
 const BASE_URL = 'http://localhost:5000/api';
@@ -38,7 +39,7 @@ async function runUpdatedWorkflowTests() {
     const adminRes = await fetch(`${BASE_URL}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: 'admin@eduverify.ac.in', password: 'AdminPassword123!' }),
+      body: JSON.stringify({ email: 'admin@eduverify.ac.in', password: process.env.SEED_ADMIN_PASSWORD }),
     });
     const adminData = await adminRes.json();
     adminToken = adminData.token;

@@ -1,3 +1,4 @@
+import '../config/db.js';
 const BASE_URL = 'http://localhost:5000/api';
 
 async function req(endpoint, options = {}) {
@@ -35,7 +36,7 @@ async function runE2ETest() {
     console.log('\n3. Logging in as student...');
     const loginRes = await req('/auth/login', {
       method: 'POST',
-      body: { email: 'student@eduverify.ac.in', password: 'StudentPassword123!' },
+      body: { email: 'student@eduverify.ac.in', password: process.env.SEED_STUDENT_PASSWORD },
     });
     const studentToken = loginRes.token;
     console.log('✓ Student logged in successfully.');

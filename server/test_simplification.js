@@ -1,3 +1,4 @@
+import './src/config/db.js';
 import fetch from 'node-fetch';
 
 const BASE_URL = 'http://localhost:5000/api';
@@ -51,7 +52,7 @@ async function runComprehensiveTests() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         email: 'admin@eduverify.ac.in',
-        password: 'AdminPassword123!',
+        password: process.env.SEED_ADMIN_PASSWORD,
       }),
     });
     const adminData = await adminRes.json();

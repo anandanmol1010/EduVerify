@@ -55,7 +55,7 @@ The user interface adheres to a mature, trustworthy college admission aesthetic:
 - **Frontend:** React.js 18 with Vite, React Router v6, Tailwind CSS
 - **Icons & Charts:** Lucide React, Recharts
 - **Backend:** Node.js & Express.js (Modular ES Modules Architecture)
-- **Database:** MongoDB with Mongoose (with automated in-memory MongoDB fallback via `mongodb-memory-server` if local mongod is not running)
+- **Database:** MongoDB Atlas with Mongoose
 - **Authentication:** JWT (JSON Web Tokens) with HTTP Bearer Authorization & bcrypt password hashing
 - **File & Document Processing:** Multer for file uploads, PDFKit for PDF generation, QRCode for verification badges, Tesseract.js & pdf-parse for OCR extraction
 
@@ -76,10 +76,10 @@ The platform enforces clean, role-based access control across two distinct porta
 
 Use any of these pre-configured accounts to sign in immediately:
 
-| Role | Email | Password |
+| Role | Email | Password environment variable |
 | :--- | :--- | :--- |
-| **Administrator** | `admin@eduverify.ac.in` | `AdminPassword123!` |
-| **Student Applicant** | `student@eduverify.ac.in` | `StudentPassword123!` |
+| **Administrator** | `admin@eduverify.ac.in` | `SEED_ADMIN_PASSWORD` |
+| **Student Applicant** | `student@eduverify.ac.in` | `SEED_STUDENT_PASSWORD` |
 
 *(Prospective students can also click **Apply Now** on the homepage to register new accounts).*
 
@@ -89,7 +89,7 @@ Use any of these pre-configured accounts to sign in immediately:
 
 Official DigiLocker API requires statutory government approval and organizational clearances outside the scope of an academic demonstration. 
 
-EduVerify provides an interchangeable, decoupled **Mock DigiLocker Provider** styled with a reference-matched light lavender interface, 6-digit OTP verification, and an explicit per-document consent screen. It is seeded with **15 realistic fictional student records** across CBSE, ICSE/ISC, and State Boards.
+EduVerify provides an interchangeable, decoupled **Mock DigiLocker Provider** styled with a reference-matched light lavender interface, 6-digit OTP verification, and an explicit per-document consent screen. It is seeded with **six fictional student records** across CBSE, ICSE/ISC, and State Boards.
 
 ### 📱 Fictional Demo Mobile Numbers for Testing
 
@@ -126,13 +126,32 @@ npm install
 Configure your environment variables in `server/.env` (an `.env.example` is also provided):
 ```env
 PORT=5000
-MONGODB_URI=mongodb://127.0.0.1:27017/eduverify
-JWT_SECRET=eduverify_super_secret_jwt_key_2026_institutional_grade
+MONGODB_URI=mongodb+srv://<database-user>:<encoded-password>@<cluster>.mongodb.net/eduverify?retryWrites=true&w=majority
+JWT_SECRET=<random-secret>
 NODE_ENV=development
 BASE_URL=http://localhost:5000
 CLIENT_URL=http://localhost:5173
 ```
-*Note: If a local MongoDB daemon is not running on port 27017, the server will automatically launch an in-memory MongoDB instance for self-contained execution.*
+In Atlas, give the database user read/write access to `eduverify` and add the backend's outbound IP to the project's IP access list. Use the hostname from **Connect ? Drivers** and URL-encode the username and password. [Atlas driver connection guide](https://www.mongodb.com/docs/atlas/driver-connection/)
+
+For demo workflows, set `SEED_ADMIN_PASSWORD` and `SEED_STUDENT_PASSWORD` in `server/.env`, then run `npm run seed` from `server`. Use at least 12 characters for each password. The command adds missing demo users, courses, settings and DigiLocker fixtures. You can rerun it while preserving existing records and PDFs.
+
+#### MongoDB schema
+
+| Collection | Stores | Key constraints and access paths |
+| --- | --- | --- |
+| `users` | Student and admin accounts, bcrypt password hashes | Unique email |
+| `studentprofiles` | Personal details, addresses, Class 10 and 12 results | Unique user reference |
+| `courses` | Course catalogue, seat counts and embedded eligibility rules | Unique course code |
+| `applications` | Student and course references, submitted snapshots, eligibility evaluation, document references and status history | Unique application number. Indexed by student, course lookup and review status. |
+| `documents` | Upload metadata, OCR results and verification state | Indexed for student listings and application and document type lookups |
+| `admissionletters` | Issued letter metadata and verification token | Unique admission ID, application reference and token. Student listing index. |
+| `notifications` | Recipient, message and read state | Indexed for recent and unread notifications |
+| `admissionsettings` | Institution details and admission window | Single settings record by application convention |
+| `mockstudentrecords` | Fictional DigiLocker candidates and available document metadata | Unique reference ID and sparse unique demo account ID |
+| `digilockersessions` | Mock verification, consent and document-fetch sessions | Unique session ID. TTL index expires sessions by `expiresAt`. |
+
+Mongoose owns field validation and index definitions. The API initializes the models at startup. MongoDB stores file paths and metadata. Uploaded documents and admission-letter PDFs are stored under `server/uploads/`, which needs persistent storage alongside the hosted API. The database credential belongs in the backend environment.
 
 ### 2. Frontend Setup
 ```bash
@@ -148,7 +167,7 @@ Open two terminal windows:
 cd server
 node src/server.js
 ```
-The server starts on `http://localhost:5000`. On first run, it automatically seeds courses, admin accounts, student accounts, and generates sample PDF documents in `server/uploads/mock_documents/`.
+The server starts on `http://localhost:5000` once MongoDB and the model indexes are ready. `GET /api/health` checks the live database connection.
 
 **Terminal 2 (Frontend Client):**
 ```bash
@@ -162,7 +181,7 @@ The client starts on `http://localhost:5173`.
 ## 🔄 Complete End-to-End Walkthrough
 
 1. **Student Registration / Sign In:**
-   - Go to `http://localhost:5173/login` and log in as `student@eduverify.ac.in` (Password: `StudentPassword123!`).
+   - Go to `http://localhost:5173/login` and log in as `student@eduverify.ac.in` (use the value of `SEED_STUDENT_PASSWORD`).
 2. **Start Admission Application:**
    - Click **"Apply Now"** or browse **"Courses"**.
    - Choose a program (e.g., **B.Tech in Computer Science & Engineering**).
@@ -180,7 +199,7 @@ The client starts on `http://localhost:5173`.
    - In Stage 4, click **"Run Eligibility Check & Review"** to preview qualifications against cutoff rules.
    - Click **"Submit Final Application"**; application transitions to `Pending Verification`.
 6. **Admin Scrutiny & Document Verification:**
-   - Log out and log in as `admin@eduverify.ac.in` (Password: `AdminPassword123!`).
+   - Log out and log in as `admin@eduverify.ac.in` (use the value of `SEED_ADMIN_PASSWORD`).
    - Navigate to **"Applications"** (`/admin/applications`) and select the submitted application.
    - Scrutinize documents, preview PDFs, compare OCR extracted entities, and click **"Mark Verified"** on each mandatory document (including Aadhaar).
    - *(Optional)* If corrections are needed, click **"Request Correction"** with detailed remarks; the student receives a notification and can update documents and resubmit.
@@ -290,7 +309,7 @@ EduVerify/
 │
 ├── server/                      # Node.js + Express REST API
 │   ├── src/
-│   │   ├── config/              # MongoDB connection with in-memory fallback
+│   │   ├── config/              # MongoDB connection and health check
 │   │   ├── middleware/          # JWT auth middleware (protect, authorize)
 │   │   ├── models/              # User, Course, Application, Document, AdmissionLetter, Notification, AdmissionSetting, MockStudentRecord, DigiLockerSession
 │   │   ├── routes/              # authRoutes, courseRoutes, applicationRoutes, documentRoutes, adminRoutes, admissionLetterRoutes, notificationRoutes, digiLockerRoutes

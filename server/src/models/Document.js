@@ -89,4 +89,8 @@ const documentSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+documentSchema.index({ student: 1, createdAt: -1 });
+documentSchema.index({ student: 1, application: 1, docType: 1 });
+documentSchema.index({ application: 1, docType: 1 });
+
 export const Document = mongoose.model('Document', documentSchema);

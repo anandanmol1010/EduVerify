@@ -52,4 +52,6 @@ const admissionLetterSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+admissionLetterSchema.index({ student: 1, createdAt: -1 });
+
 export const AdmissionLetter = mongoose.model('AdmissionLetter', admissionLetterSchema);

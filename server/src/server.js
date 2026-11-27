@@ -1,12 +1,9 @@
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
-import { fileURLToPath } from 'url';
 
-import { connectDB } from './config/db.js';
-import { seedDatabase } from './seeds/seed.js';
+import { connectDB, pingDB } from './config/db.js';
 
 // Route imports
 import authRoutes from './routes/authRoutes.js';
@@ -17,11 +14,6 @@ import applicationRoutes from './routes/applicationRoutes.js';
 import admissionLetterRoutes from './routes/admissionLetterRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
-
-dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -61,9 +53,15 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
 
 // Health check endpoint
-app.get('/api/health', (req, res) => {
+app.get('/api/health', async (req, res) => {
+  try {
+    await pingDB();
+  } catch {
+    return res.status(503).json({ status: 'unavailable', database: 'unavailable' });
+  }
   res.json({
     status: 'healthy',
+    database: 'connected',
     system: 'EduVerify Admission Automation API',
     version: '1.0.0',
     timestamp: new Date().toISOString(),
@@ -79,18 +77,12 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start Server and Seed on first run if needed
 const startServer = async () => {
   try {
-    await connectDB();
-    
-    // Auto-seed if database is freshly started
-    const { Course } = await import('./models/Course.js');
-    const existingCourses = await Course.countDocuments();
-    if (existingCourses === 0) {
-      console.log('[Server] Database is empty. Running initial seed data...');
-      await seedDatabase();
+    if (!process.env.JWT_SECRET) {
+      throw new Error('Set JWT_SECRET in server/.env before starting the API.');
     }
+    await connectDB();
 
     app.listen(PORT, () => {
       console.log(`====================================================`);
@@ -100,7 +92,7 @@ const startServer = async () => {
       console.log(`====================================================`);
     });
   } catch (error) {
-    console.error('Failed to start server:', error);
+    console.error('Failed to start server:', error.message);
     process.exit(1);
   }
 };
