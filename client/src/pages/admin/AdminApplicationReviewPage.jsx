@@ -95,7 +95,7 @@ export default function AdminApplicationReviewPage() {
 
   // Final Formal Admission Approval
   const handleFinalApproval = async () => {
-    if (!window.confirm('Accept this application, allocate an admission seat, and generate the official Admission Letter?')) return;
+    if (!window.confirm('Accept this application, allocate a seat, and generate the demo admission letter?')) return;
     setActionLoading(true);
     setError('');
     setSuccess('');

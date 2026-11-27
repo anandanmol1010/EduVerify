@@ -87,7 +87,7 @@ export const approveAdmission = async ({ application, course, actor, automatic, 
     })), { session });
   }
 
-  const admissionId = `SJ-${now.getFullYear()}-ADM-${randomBytes(8).toString('hex').toUpperCase()}`;
+  const admissionId = `ABESEC-${now.getFullYear()}-ADM-${randomBytes(8).toString('hex').toUpperCase()}`;
   const verificationToken = randomBytes(32).toString('hex');
   const publicUrl = `${clientUrl()}/verify-admission/${admissionId}?token=${verificationToken}`;
   const filename = `admission-letter-${admissionId}.pdf`;

@@ -43,7 +43,7 @@ export default function HomePage() {
             </h1>
 
             <p className="text-[#6B716C] text-base leading-relaxed">
-              Welcome to the official admissions portal of St. Jude Institute of Higher Sciences. Explore available undergraduate programs, automatically retrieve your marks with our demo document locker, verify your eligibility in seconds, and track your application status online.
+              Explore the EduVerify admissions demo for ABES Engineering College, Ghaziabad. Import demo marksheets, check eligibility, and track your application online.
             </p>
 
             <div className="pt-2 flex flex-wrap gap-3">

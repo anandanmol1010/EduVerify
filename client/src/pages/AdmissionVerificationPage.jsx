@@ -65,7 +65,7 @@ export default function AdmissionVerificationPage() {
             required
             value={inputAdmissionId}
             onChange={(e) => setInputAdmissionId(e.target.value)}
-            placeholder="e.g. SJ-2026-ADM-0101"
+            placeholder="Enter admission reference number"
             className="flex-1 text-xs p-2.5 border border-[#DDDCD5] rounded bg-[#F7F6F2] font-mono focus:outline-none focus:border-[#254D3C]"
           />
           <button
@@ -84,10 +84,10 @@ export default function AdmissionVerificationPage() {
               <CheckCircle2 className="w-6 h-6 flex-shrink-0" />
               <div>
                 <h2 className="font-serif font-bold text-base text-[#254D3C]">
-                  Official Admission Record Confirmed
+                  Demo Admission Record Confirmed
                 </h2>
                 <p className="text-xs text-[#2B6E4E]">
-                  This admission letter has been verified against the college admissions register.
+                  This admission letter matches the record in EduVerify.
                 </p>
               </div>
             </div>
@@ -128,7 +128,7 @@ export default function AdmissionVerificationPage() {
             </div>
 
             <div className="text-[11px] text-[#6B716C] pt-2 border-t border-emerald-100 flex items-center justify-between">
-              <span>Verified through St. Jude Institute Admissions Register</span>
+              <span>Verified in EduVerify</span>
               <span className="font-semibold text-[#2B6E4E]">Status: Confirmed & Active</span>
             </div>
           </div>
@@ -143,9 +143,6 @@ export default function AdmissionVerificationPage() {
             </h2>
             <p className="text-xs text-[#252824] max-w-sm mx-auto">
               {error}
-            </p>
-            <p className="text-[11px] text-[#6B716C] mt-2">
-              If you have any questions, please contact the admissions helpline at admissions@eduverify.ac.in.
             </p>
           </div>
         )}

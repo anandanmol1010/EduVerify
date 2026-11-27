@@ -1,6 +1,6 @@
 # EduVerify — Admission Process Automation System
 
-An automated, integrity-driven admission processing and academic document verification platform developed for college and university higher education admissions.
+An admissions and academic document verification demo for ABES Engineering College, Ghaziabad.
 
 EduVerify eliminates paper-intensive scrutiny, slow manual evaluations, and fraudulent qualifications through:
 1. **Simulated DigiLocker Document Integration** with automated academic marks population.
@@ -68,7 +68,7 @@ The platform enforces clean, role-based access control across two distinct porta
 
 | Role | Access Level | Key Capabilities |
 | :--- | :--- | :--- |
-| **Student** | `/student/*` | Browse courses, connect to DigiLocker Demo or upload manually, auto-populate marks, fill complete personal & address records, check eligibility, save drafts, track application lifecycle, respond to correction requests with remarks, and download official admission letters. |
+| **Student** | `/student/*` | Browse courses, connect to DigiLocker Demo or upload manually, auto-populate marks, fill complete personal & address records, check eligibility, save drafts, track application lifecycle, respond to correction requests with remarks, and download demo admission letters. |
 | **Admin** | `/admin/*` | Full institutional oversight: view real-time database dashboard statistics, manage course offerings and eligibility cutoffs, scrutinize incoming applications, preview uploaded certificates & OCR extractions, verify/reject documents, request corrections, make final admission decisions, and monitor seat quotas. |
 
 ---

@@ -27,7 +27,7 @@ export default function StudentLettersPage() {
       <div className="space-y-6 max-w-4xl mx-auto">
         <div>
           <h1 className="font-serif text-2xl font-bold text-[#254D3C]">
-            Official Admission Letters
+            Demo Admission Letters
           </h1>
           <p className="text-xs text-[#6B716C] mt-1">
             Download your verifiable provisional admission confirmation certificates with embedded QR codes.
@@ -41,7 +41,7 @@ export default function StudentLettersPage() {
             <Award className="w-10 h-10 text-[#DDDCD5] mx-auto mb-2" />
             <h3 className="font-serif font-bold text-sm text-[#252824]">No Admission Letters Issued Yet</h3>
             <p className="text-xs text-[#6B716C] mt-1 max-w-md mx-auto">
-              Once an admission officer confirms your application and allots a seat in your chosen program, your official admission letter will be generated here.
+              Your demo admission letter will appear here once EduVerify confirms your application and allocates a seat.
             </p>
           </div>
         ) : (

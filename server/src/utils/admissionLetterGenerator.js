@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import PDFDocument from 'pdfkit';
 import QRCode from 'qrcode';
+import { institution } from '../config/institution.js';
 
 export const generateAdmissionLetterPdf = async ({
   admissionId,
@@ -40,15 +41,14 @@ export const generateAdmissionLetterPdf = async ({
       doc.rect(25, 25, 545, 792).lineWidth(1.5).strokeColor('#254D3C').stroke();
       doc.rect(29, 29, 537, 784).lineWidth(0.5).strokeColor('#B18B56').stroke();
 
-      // University Crest / Top Emblem
-      doc.fillColor('#254D3C').fontSize(20).font('Helvetica-Bold')
-         .text('ST. JUDE INSTITUTE OF HIGHER SCIENCES', 45, 50, { align: 'center', characterSpacing: 1 });
+      doc.fillColor('#254D3C').fontSize(18).font('Helvetica-Bold')
+         .text(institution.name.toUpperCase(), 45, 50, { align: 'center', characterSpacing: 0.6 });
       
       doc.fillColor('#B18B56').fontSize(10).font('Helvetica-Bold')
-         .text('ACCREDITED GRADE A+ BY NAAC • ESTABLISHED 1982', { align: 'center', characterSpacing: 1.5 });
+         .text('EDUVERIFY ADMISSIONS DEMO', { align: 'center', characterSpacing: 1.5 });
       
       doc.fillColor('#6B716C').fontSize(9).font('Helvetica')
-         .text('Affiliated to Apex State Technical University • Knowledge Boulevard, Bangalore 560012', { align: 'center' });
+         .text(institution.address, { align: 'center' });
       
       doc.moveDown(0.8);
       doc.strokeColor('#DDDCD5').lineWidth(1).moveTo(45, doc.y).lineTo(550, doc.y).stroke();
@@ -58,7 +58,7 @@ export const generateAdmissionLetterPdf = async ({
       doc.fillColor('#254D3C').fontSize(14).font('Helvetica-Bold')
          .text('PROVISIONAL ADMISSION CONFIRMATION LETTER', { align: 'center' });
       doc.fillColor('#6B716C').fontSize(9).font('Helvetica')
-         .text(`Academic Session: ${academicSession} • Official Letter of Admission`, { align: 'center' });
+         .text(`Academic Session: ${academicSession} • Demo Admission Letter`, { align: 'center' });
 
       doc.moveDown(1.5);
 
@@ -69,9 +69,10 @@ export const generateAdmissionLetterPdf = async ({
 
       doc.fillColor('#252824').fontSize(9.5).font('Helvetica-Bold');
       doc.text('Admission Reference ID:', 60, startY + 12);
-      doc.fillColor('#254D3C').font('Helvetica-Bold').text(admissionId, 210, startY + 12);
+      doc.fillColor('#254D3C').font('Helvetica-Bold').fontSize(8)
+         .text(admissionId, 210, startY + 12, { width: 150, lineBreak: false });
 
-      doc.fillColor('#252824').font('Helvetica-Bold').text('Application Number:', 60, startY + 30);
+      doc.fillColor('#252824').font('Helvetica-Bold').fontSize(9.5).text('Application Number:', 60, startY + 30);
       doc.font('Helvetica').text(applicationNumber, 210, startY + 30);
 
       doc.font('Helvetica-Bold').text('Candidate Name:', 60, startY + 48);
@@ -81,11 +82,11 @@ export const generateAdmissionLetterPdf = async ({
       doc.font('Helvetica').text(new Date(issueDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }), 210, startY + 66);
 
       // Program Details (Right Column of box)
-      doc.font('Helvetica-Bold').text('Program Allotted:', 340, startY + 12);
-      doc.font('Helvetica-Bold').fillColor('#254D3C').text(`${courseTitle} (${courseCode})`, 340, startY + 28, { width: 195 });
+      doc.font('Helvetica-Bold').text('Program Allotted:', 365, startY + 12);
+      doc.font('Helvetica-Bold').fillColor('#254D3C').text(`${courseTitle} (${courseCode})`, 365, startY + 28, { width: 170 });
 
-      doc.fillColor('#252824').font('Helvetica-Bold').text('Department:', 340, startY + 54);
-      doc.font('Helvetica').text(departmentName || 'Engineering & Computing', 340, startY + 68);
+      doc.fillColor('#252824').font('Helvetica-Bold').text('Department:', 365, startY + 54);
+      doc.font('Helvetica').text(departmentName || 'Engineering & Computing', 365, startY + 68, { width: 170 });
 
       doc.y = startY + 110;
 
@@ -95,7 +96,7 @@ export const generateAdmissionLetterPdf = async ({
       doc.moveDown(0.8);
 
       doc.text(
-        `We are pleased to inform you that your application for admission to ${courseTitle} (${courseCode}) for the academic academic session ${academicSession} has been formally approved and confirmed after thorough automated and manual credential verification through the EduVerify Admissions Gateway.`,
+        `Your demo application for ${courseTitle} (${courseCode}) for the academic session ${academicSession} was approved in EduVerify.`,
         45,
         doc.y,
         { width: 505, align: 'justify', lineGap: 4 }
@@ -103,44 +104,24 @@ export const generateAdmissionLetterPdf = async ({
       doc.moveDown(0.8);
 
       doc.text(
-        `Your seat allocation has been confirmed against merit ranking and institutional seat quotas. This provisional admission is subject to the submission and physical verification of all original qualifying certificates during reporting day at the Office of the Registrar.`,
+        'This document records the outcome of the EduVerify demonstration. For college admissions and reporting information, visit the ABES Engineering College website.',
         45,
         doc.y,
         { width: 505, align: 'justify', lineGap: 4 }
       );
       doc.moveDown(1.2);
 
-      // Key Directives Table
-      doc.fillColor('#254D3C').fontSize(10).font('Helvetica-Bold').text('REPORTING INSTRUCTIONS & CONDITIONS:', 45, doc.y);
-      doc.moveDown(0.5);
-
-      const bullets = [
-        'Commencement of academic orientation: First Monday of August 2026.',
-        'Carry two self-attested photocopies of Class 10th and 12th certificates along with this letter.',
-        'Deposit first-semester term fees online through the student portal within 10 days of issuance.',
-        'Hostel room allotment will commence post physical document verification on campus.',
-      ];
-
-      bullets.forEach((b) => {
-        doc.fillColor('#6B716C').fontSize(9).font('Helvetica').text(`•  ${b}`, 55, doc.y, { width: 490, lineGap: 2 });
-      });
-
-      doc.moveDown(1.5);
-
-      // Footer with QR Code and Signatures
+      // Verification footer
       const footerY = 620;
       doc.strokeColor('#DDDCD5').lineWidth(0.8).moveTo(45, footerY).lineTo(550, footerY).stroke();
 
       // Embed QR code
       doc.image(qrBuffer, 55, footerY + 15, { width: 95 });
       doc.fillColor('#6B716C').fontSize(7.5).font('Helvetica')
-         .text('Scan with any standard QR reader\nor visit eduverify public verification portal\nto confirm authenticity of this document.', 160, footerY + 35, { width: 170 });
+         .text('Scan the QR code to verify this demo admission record in EduVerify.', 160, footerY + 35, { width: 170 });
 
-      // Signatory Section
-      doc.fillColor('#252824').fontSize(9).font('Helvetica-Bold')
-         .text('Dr. S. K. Ramanathan, Ph.D.', 380, footerY + 55, { align: 'right' });
       doc.fillColor('#6B716C').fontSize(8).font('Helvetica')
-         .text('Dean of Academic Admissions\nSt. Jude Institute of Technology\n(Digitally Authenticated via EduVerify)', 330, footerY + 70, { align: 'right' });
+         .text('Generated by EduVerify', 330, footerY + 70, { align: 'right' });
 
       doc.end();
       writeStream.on('finish', () => resolve(outputPath));

@@ -1,10 +1,11 @@
 import mongoose from 'mongoose';
+import { institution } from '../config/institution.js';
 
 const admissionSettingSchema = new mongoose.Schema(
   {
     institutionName: {
       type: String,
-      default: 'St. Jude Institute of Higher Technology & Sciences',
+      default: institution.name,
     },
     academicYear: {
       type: String,
@@ -30,11 +31,11 @@ const admissionSettingSchema = new mongoose.Schema(
     },
     supportEmail: {
       type: String,
-      default: 'admissions@eduverify.ac.in',
+      default: institution.email,
     },
     contactPhone: {
       type: String,
-      default: '+91 80 2345 6789',
+      default: institution.phone,
     },
     termsAndConditions: {
       type: String,

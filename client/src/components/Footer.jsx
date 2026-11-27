@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { institution } from '../config/institution';
 
 export default function Footer() {
   return (
@@ -15,10 +16,7 @@ export default function Footer() {
               <span className="font-serif text-base font-bold text-[#254D3C]">EduVerify</span>
             </div>
             <p className="text-xs text-[#6B716C] leading-relaxed max-w-sm">
-              The official online admissions portal of St. Jude Institute of Higher Sciences. Supporting prospective students with smooth application submissions, document imports, and instant admission updates.
-            </p>
-            <p className="text-xs text-[#6B716C]">
-              St. Jude Institute of Higher Sciences • Established 1982
+              EduVerify admissions demo for {institution.name}.
             </p>
           </div>
 
@@ -39,18 +37,18 @@ export default function Footer() {
 
           {/* Institutional Contact */}
           <div>
-            <h4 className="text-xs font-bold text-[#252824] uppercase tracking-wider mb-3">Admissions Office</h4>
+            <h4 className="text-xs font-bold text-[#252824] uppercase tracking-wider mb-3">College Contact</h4>
             <div className="space-y-1.5 text-xs text-[#6B716C]">
-              <p>Office of the Registrar</p>
-              <p>Email: admissions@eduverify.ac.in</p>
-              <p>Phone: +91 80 2345 6789</p>
-              <p>Office Hours: Monday – Friday, 9:00 AM – 5:00 PM</p>
+              <p>{institution.address}</p>
+              <p><a className="hover:underline" href={`mailto:${institution.email}`}>{institution.email}</a></p>
+              <p>{institution.phone}</p>
+              <p><a className="hover:underline" href={institution.website}>ABES Engineering College website</a></p>
             </div>
           </div>
         </div>
 
         <div className="border-t border-[#ECEBE4] mt-8 pt-6 flex flex-col sm:flex-row items-center justify-between text-[11px] text-[#6B716C]">
-          <p>© 2026 St. Jude Institute of Higher Sciences. All rights reserved.</p>
+          <p>© 2026 EduVerify</p>
           <div className="flex space-x-4 mt-2 sm:mt-0">
             <Link to="/guidelines" className="hover:text-[#254D3C]">Admissions Help</Link>
             <span>•</span>

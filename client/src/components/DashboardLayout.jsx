@@ -125,7 +125,7 @@ export default function DashboardLayout({ children, roleTitle }) {
       <main className="flex-1 flex flex-col min-w-0 h-full overflow-y-auto">
         <header className="h-14 bg-[#FFFFFF] border-b border-[#DDDCD5] px-6 flex items-center justify-between flex-shrink-0 sticky top-0 z-20">
           <div className="text-xs text-[#6B716C]">
-            Session: <span className="font-semibold text-[#252824]">2026–2027</span> • St. Jude Institute of Higher Sciences
+            Session: <span className="font-semibold text-[#252824]">2026–2027</span> • ABES Engineering College, Ghaziabad
           </div>
         </header>
 

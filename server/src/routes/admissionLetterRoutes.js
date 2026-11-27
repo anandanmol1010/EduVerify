@@ -2,6 +2,7 @@ import express from 'express';
 import { AdmissionLetter } from '../models/AdmissionLetter.js';
 import { Application } from '../models/Application.js';
 import { protect } from '../middleware/auth.js';
+import { institution } from '../config/institution.js';
 
 const router = express.Router();
 
@@ -74,8 +75,8 @@ router.get('/public-verify/:admissionId', async (req, res) => {
         courseCode: letter.course.code,
         academicSession: letter.academicSession,
         issueDate: letter.issuedDate,
-        institution: 'St. Jude Institute of Higher Technology & Sciences',
-        status: 'Authentic & Confirmed',
+        institution: institution.name,
+        status: 'Confirmed in EduVerify',
       },
     });
   } catch (error) {
