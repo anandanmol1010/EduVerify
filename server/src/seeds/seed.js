@@ -22,27 +22,15 @@ const createIfMissing = async (Model, filter, data) => {
 export const seedDatabase = async () => {
   console.log('[Seed] Adding missing demo records...');
 
-  const users = [
-    {
-      name: 'Dr. Alistair Vance',
-      email: 'admin@eduverify.ac.in',
-      password: process.env.SEED_ADMIN_PASSWORD,
-      role: 'admin',
-      phone: '+91 98765 43210',
-    },
-    {
-      name: 'Aarav Sharma',
-      email: 'student@eduverify.ac.in',
-      password: process.env.SEED_STUDENT_PASSWORD,
-      role: 'student',
-      phone: '+91 98112 33445',
-    },
-  ];
-
-  for (const { email, password, role } of users) {
-    if (!(await User.exists({ email })) && (!password || password.length < 12)) {
-      throw new Error(`Set SEED_${role.toUpperCase()}_PASSWORD to at least 12 characters before creating ${email}.`);
-    }
+  const admin = {
+    name: 'Dr. Alistair Vance',
+    email: 'admin@eduverify.ac.in',
+    password: process.env.SEED_ADMIN_PASSWORD,
+    role: 'admin',
+    phone: '+91 98765 43210',
+  };
+  if (!(await User.exists({ email: admin.email })) && (!admin.password || admin.password.length < 12)) {
+    throw new Error(`Set SEED_ADMIN_PASSWORD to at least 12 characters before creating ${admin.email}.`);
   }
 
   if (!(await AdmissionSetting.exists({}))) {
@@ -51,9 +39,7 @@ export const seedDatabase = async () => {
       admissionEndDate: new Date('2026-11-30'),
     });
   }
-  for (const user of users) {
-    await createIfMissing(User, { email: user.email }, user);
-  }
+  await createIfMissing(User, { email: admin.email }, admin);
 
   const coursesData = [
     {

@@ -1,19 +1,20 @@
 import './src/config/db.js';
-import fetch from 'node-fetch';
+import { randomUUID } from 'node:crypto';
 
 const BASE_URL = 'http://localhost:5000/api';
 
 async function runTests() {
   console.log('=== Starting EduVerify End-to-End Workflow Verification ===\n');
 
-  // 1. Student Login
-  console.log('[Test 1] Logging in as Student...');
-  const studentLoginRes = await fetch(`${BASE_URL}/auth/login`, {
+  // 1. Register a student
+  console.log('[Test 1] Registering a student...');
+  const studentLoginRes = await fetch(`${BASE_URL}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      email: 'student@eduverify.ac.in',
-      password: process.env.SEED_STUDENT_PASSWORD,
+      name: 'Aarav Sharma',
+      email: `workflow-${randomUUID()}@example.test`,
+      password: randomUUID(),
     }),
   });
   const studentLogin = await studentLoginRes.json();

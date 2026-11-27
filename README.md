@@ -31,7 +31,8 @@ EduVerify is architected to balance real-world institutional rigor with modern f
 - Upload feedback shows detected mismatches to the student. Final submission checks readable document values against the current form.
 
 ### 4. Concurrency-Safe Seat Allotment & QR Verification
-- A fully verified application is accepted automatically. Seat allocation, the acceptance record, admission letter metadata, and the student notification are committed in one MongoDB Atlas transaction.
+- Fully verified DigiLocker applications are accepted automatically. Applications with manual uploads go to an admissions officer for document verification and approval.
+- A student can be accepted into one course. Seat allocation, acceptance, rejection of other submitted applications, admission letter metadata, and notifications are committed in one MongoDB Atlas transaction.
 - Generates an official PDF admission letter using `PDFKit` with a cryptographic verification token and embeds a QR code pointing to `/verify-admission/:admissionId`.
 - The public verification endpoint (`GET /api/letters/public-verify/:admissionId`) checks letter validity and displays the authenticated candidate's name (masked for privacy) and enrolled program.
 
@@ -79,7 +80,6 @@ Use any of these pre-configured accounts to sign in immediately:
 | Role | Email | Password environment variable |
 | :--- | :--- | :--- |
 | **Administrator** | `admin@eduverify.ac.in` | `SEED_ADMIN_PASSWORD` |
-| **Student Applicant** | `student@eduverify.ac.in` | `SEED_STUDENT_PASSWORD` |
 
 *(Prospective students can also click **Apply Now** on the homepage to register new accounts).*
 
@@ -134,7 +134,7 @@ CLIENT_URL=http://localhost:5173
 ```
 In Atlas, give the database user read/write access to `eduverify` and add the backend's outbound IP to the project's IP access list. Use the hostname from **Connect ? Drivers** and URL-encode the username and password. [Atlas driver connection guide](https://www.mongodb.com/docs/atlas/driver-connection/)
 
-For demo workflows, set `SEED_ADMIN_PASSWORD` and `SEED_STUDENT_PASSWORD` in `server/.env`, then run `npm run seed` from `server`. Use at least 12 characters for each password. The command adds missing demo users, courses, settings and DigiLocker fixtures. You can rerun it while preserving existing records and PDFs.
+For demo workflows, set `SEED_ADMIN_PASSWORD` to at least 12 characters in `server/.env`, then run `npm run seed` from `server`. The command adds the demo administrator and any missing courses, settings and DigiLocker fixtures. Students create their own accounts through registration. You can rerun the seed while preserving existing records and PDFs.
 
 #### MongoDB schema
 
@@ -191,7 +191,7 @@ Keep the public demo on fictional data. Restrict file access to authenticated ow
 ## 🔄 Complete End-to-End Walkthrough
 
 1. **Student Registration / Sign In:**
-   - Go to `http://localhost:5173/login` and log in as `student@eduverify.ac.in` (use the value of `SEED_STUDENT_PASSWORD`).
+   - Register a student account at `http://localhost:5173/register` and sign in with the credentials you chose.
 2. **Start Admission Application:**
    - Click **"Apply Now"** or browse **"Courses"**.
    - Choose a program (e.g., **B.Tech in Computer Science & Engineering**).
@@ -213,7 +213,9 @@ Keep the public demo on fictional data. Restrict file access to authenticated ow
 6. **Verify the letter**
    - Scan the QR code or visit `/verify-admission/:admissionId` for the public verification page.
 
-Automatic approval uses marksheets imported through DigiLocker consent. Re-import older documents if the review asks for issuer verification. Manually uploaded documents receive OCR feedback and require an existing verification record for automatic approval. The current issuer is the fictional DigiLocker demo provider.
+Manual uploads receive OCR feedback and go to an officer after the application passes its submission checks. The officer verifies the uploads before approving admission. Accepting one application rejects the student's other submitted applications with the reason “You got accepted in another course.” The current DigiLocker provider uses fictional records.
+
+Local development has a fixed demo login shortcut for the seeded administrator. The deployed app uses the administrator password configured at seeding.
 
 
 ---
@@ -223,7 +225,7 @@ Automatic approval uses marksheets imported through DigiLocker consent. Re-impor
 The older standalone workflow runners exercise the previous officer-led workflow. To check automatic approval, use a seeded Atlas test database and confirm the following cases:
 
 - Scores below a course cutoff block progress and direct submission requests.
-- Missing documents, manually uploaded marksheets, and issuer mismatches block final submission.
+- Missing documents and issuer mismatches block submission. Eligible manual uploads enter the review queue and require document verification before approval.
 - Matching DigiLocker documents and qualifying marks result in an accepted application and a downloadable letter.
 - Concurrent eligible applications for a course with one remaining seat result in a single acceptance.
 

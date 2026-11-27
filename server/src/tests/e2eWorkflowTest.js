@@ -1,4 +1,5 @@
 import '../config/db.js';
+import { randomUUID } from 'node:crypto';
 const BASE_URL = 'http://localhost:5000/api';
 
 async function req(endpoint, options = {}) {
@@ -32,11 +33,12 @@ async function runE2ETest() {
     const btechCourse = coursesRes.courses.find((c) => c.code === 'BTECH-CSE');
     console.log(`✓ Target Course for Application: ${btechCourse.title} (${btechCourse.code})`);
 
-    // 3. Login as student
-    console.log('\n3. Logging in as student...');
-    const loginRes = await req('/auth/login', {
+    // 3. Register a student
+    console.log('\n3. Registering a student...');
+    const email = `workflow-${randomUUID()}@example.test`;
+    const loginRes = await req('/auth/register', {
       method: 'POST',
-      body: { email: 'student@eduverify.ac.in', password: process.env.SEED_STUDENT_PASSWORD },
+      body: { name: 'Aarav Sharma', email, password: randomUUID() },
     });
     const studentToken = loginRes.token;
     console.log('✓ Student logged in successfully.');
@@ -87,7 +89,7 @@ async function runE2ETest() {
         courseId: btechCourse._id,
         personalSnapshot: {
           fullName: 'Aarav Sharma',
-          email: 'student@eduverify.ac.in',
+          email,
           phone: '+91 98112 33445',
         },
         academicSnapshot: {

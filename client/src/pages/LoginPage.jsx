@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { LogIn, AlertCircle } from 'lucide-react';
@@ -8,7 +8,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const passwordInput = useRef(null);
 
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -34,11 +33,10 @@ export default function LoginPage() {
     }
   };
 
-  const handleSelectDemoAccount = (demoEmail) => {
+  const handleSelectDemoAccount = (demoEmail, demoPassword) => {
     setEmail(demoEmail);
-    setPassword('');
+    setPassword(demoPassword);
     setError('');
-    passwordInput.current?.focus();
   };
 
   return (
@@ -80,7 +78,7 @@ export default function LoginPage() {
               value={email}
               autoComplete="username"
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="e.g. student@eduverify.ac.in"
+              placeholder="you@example.com"
               className="w-full text-xs p-2.5 border border-[#DDDCD5] rounded bg-[#F7F6F2] focus:outline-none focus:border-[#254D3C]"
             />
           </div>
@@ -92,7 +90,6 @@ export default function LoginPage() {
             <input
               type="password"
               required
-              ref={passwordInput}
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -113,20 +110,10 @@ export default function LoginPage() {
 
         {import.meta.env.DEV && (
           <div className="mt-6 pt-5 border-t border-[#ECEBE4] text-xs">
-            <p className="mb-2 text-[#6B716C]">
-              For local demo accounts, enter the matching <code>SEED_STUDENT_PASSWORD</code> or <code>SEED_ADMIN_PASSWORD</code> from <code>server/.env</code>.
-            </p>
-            <div className="grid grid-cols-2 gap-3">
+            <div>
               <button
                 type="button"
-                onClick={() => handleSelectDemoAccount('student@eduverify.ac.in')}
-                className="px-3 py-2 bg-[#F7F6F2] hover:bg-[#ECEBE4] border border-[#DDDCD5] rounded text-xs text-[#254D3C] font-semibold"
-              >
-                Demo Student
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSelectDemoAccount('admin@eduverify.ac.in')}
+                onClick={() => handleSelectDemoAccount('admin@eduverify.ac.in', 'AdminPassword123!')}
                 className="px-3 py-2 bg-[#F7F6F2] hover:bg-[#ECEBE4] border border-[#DDDCD5] rounded text-xs text-[#254D3C] font-semibold"
               >
                 Demo Administrator
