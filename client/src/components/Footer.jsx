@@ -48,7 +48,11 @@ export default function Footer() {
         </div>
 
         <div className="border-t border-[#ECEBE4] mt-8 pt-6 flex flex-col sm:flex-row items-center justify-between text-[11px] text-[#6B716C]">
-          <p>© 2026 EduVerify</p>
+          <div className="space-y-1">
+            <p className="font-semibold">Developed &amp; Maintained By: Anmol Anand(CSE-11) and Ananya Agrawal(CSE-11)</p>
+            <p>Full Stack Development Team</p>
+            <p>© 2026 ABESEC Ghaziabad. All Rights Reserved.</p>
+          </div>
           <div className="flex space-x-4 mt-2 sm:mt-0">
             <Link to="/guidelines" className="hover:text-[#254D3C]">Admissions Help</Link>
             <span>•</span>

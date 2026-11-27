@@ -32,7 +32,7 @@ export default function Navbar() {
                 EduVerify
               </span>
               <span className="text-[11px] uppercase tracking-wider text-[#6B716C] font-semibold block">
-                Admissions Portal
+                ABESEC Ghaziabad
               </span>
             </div>
           </Link>

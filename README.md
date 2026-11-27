@@ -2,6 +2,8 @@
 
 An admissions and academic document verification demo for ABES Engineering College, Ghaziabad.
 
+[Live Render deployment](https://eduverify-p26x.onrender.com/)
+
 EduVerify eliminates paper-intensive scrutiny, slow manual evaluations, and fraudulent qualifications through:
 1. **Simulated DigiLocker Document Integration** with automated academic marks population.
 2. **Manual Document Upload with OCR & PDF Parsing** (powered by Tesseract.js & pdf-parse) to flag discrepancies between form inputs and certificate text.
@@ -75,12 +77,12 @@ The platform enforces clean, role-based access control across two distinct porta
 
 ## 🔐 Pre-Configured Demo Credentials
 
-Use any of these pre-configured accounts to sign in immediately:
+Use these demo accounts on the [Render sign-in page](https://eduverify-p26x.onrender.com/login).
 
-| Role | Email | Password environment variable |
+| Role | Username | Password |
 | :--- | :--- | :--- |
-| **Administrator** | `admin@eduverify.ac.in` | `SEED_ADMIN_PASSWORD` |
-| **Student Applicant** | `student@eduverify.ac.in` | `SEED_STUDENT_PASSWORD` |
+| **Administrator** | `admin@eduverify.ac.in` | `AdminPassword123!` |
+| **Student Applicant** | `student@eduverify.ac.in` | `StudentPassword123!` |
 
 *(Prospective students can also click **Apply Now** on the homepage to register new accounts).*
 
