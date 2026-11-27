@@ -12,7 +12,8 @@ const matchesLocalDemoPassword = (req, user, password) => {
   if (!['localhost', '127.0.0.1', '[::1]'].includes(req.hostname)) return false;
   const origin = req.get('Origin');
   if (origin && !/^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/.test(origin)) return false;
-  return user.email === 'admin@eduverify.ac.in' && user.role === 'admin' && password === 'AdminPassword123!';
+  if (user.email === 'admin@eduverify.ac.in' && user.role === 'admin') return password === 'AdminPassword123!';
+  return user.email === 'student@eduverify.ac.in' && user.role === 'student' && password === 'StudentPassword123!';
 };
 
 // Register a new user (default student)

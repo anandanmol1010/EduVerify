@@ -110,7 +110,14 @@ export default function LoginPage() {
 
         {import.meta.env.DEV && (
           <div className="mt-6 pt-5 border-t border-[#ECEBE4] text-xs">
-            <div>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => handleSelectDemoAccount('student@eduverify.ac.in', 'StudentPassword123!')}
+                className="px-3 py-2 bg-[#F7F6F2] hover:bg-[#ECEBE4] border border-[#DDDCD5] rounded text-xs text-[#254D3C] font-semibold"
+              >
+                Demo Student
+              </button>
               <button
                 type="button"
                 onClick={() => handleSelectDemoAccount('admin@eduverify.ac.in', 'AdminPassword123!')}

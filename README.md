@@ -80,6 +80,7 @@ Use any of these pre-configured accounts to sign in immediately:
 | Role | Email | Password environment variable |
 | :--- | :--- | :--- |
 | **Administrator** | `admin@eduverify.ac.in` | `SEED_ADMIN_PASSWORD` |
+| **Student Applicant** | `student@eduverify.ac.in` | `SEED_STUDENT_PASSWORD` |
 
 *(Prospective students can also click **Apply Now** on the homepage to register new accounts).*
 
@@ -134,7 +135,7 @@ CLIENT_URL=http://localhost:5173
 ```
 In Atlas, give the database user read/write access to `eduverify` and add the backend's outbound IP to the project's IP access list. Use the hostname from **Connect ? Drivers** and URL-encode the username and password. [Atlas driver connection guide](https://www.mongodb.com/docs/atlas/driver-connection/)
 
-For demo workflows, set `SEED_ADMIN_PASSWORD` to at least 12 characters in `server/.env`, then run `npm run seed` from `server`. The command adds the demo administrator and any missing courses, settings and DigiLocker fixtures. Students create their own accounts through registration. You can rerun the seed while preserving existing records and PDFs.
+For demo workflows, set `SEED_ADMIN_PASSWORD` and `SEED_STUDENT_PASSWORD` to at least 12 characters each in `server/.env`, then run `npm run seed` from `server`. The command adds missing demo accounts, courses, settings and DigiLocker fixtures. Students can also create their own accounts through registration. You can rerun the seed while preserving existing records and PDFs.
 
 #### MongoDB schema
 
@@ -215,7 +216,7 @@ Keep the public demo on fictional data. Restrict file access to authenticated ow
 
 Manual uploads receive OCR feedback and go to an officer after the application passes its submission checks. The officer verifies the uploads before approving admission. Accepting one application rejects the student's other submitted applications with the reason “You got accepted in another course.” The current DigiLocker provider uses fictional records.
 
-Local development has a fixed demo login shortcut for the seeded administrator. The deployed app uses the administrator password configured at seeding.
+Local development has fixed login shortcuts for the seeded administrator and student. The deployed app uses the account passwords configured at seeding.
 
 
 ---
