@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import api from '../../services/api';
 import DashboardLayout from '../../components/DashboardLayout';
 import StatusBadge from '../../components/StatusBadge';
+import DocumentStatusBadge from '../../components/DocumentStatusBadge';
 import {
   FileText,
   CheckCircle2,
@@ -420,7 +421,7 @@ export default function AdminApplicationReviewPage() {
                             Source: <strong>{doc.source}</strong> • Type: {doc.docType}
                           </div>
                         </div>
-                        <StatusBadge status={doc.verificationStatus} />
+                        <DocumentStatusBadge document={doc} />
                       </div>
 
                       {doc.extractedData?.candidateName && (

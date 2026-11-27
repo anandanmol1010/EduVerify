@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import api from '../../services/api';
 import DashboardLayout from '../../components/DashboardLayout';
 import StatusBadge from '../../components/StatusBadge';
+import DocumentStatusBadge from '../../components/DocumentStatusBadge';
 import {
   FileText,
   Clock,
@@ -212,7 +213,7 @@ export default function ApplicationDetailPage() {
                 <div>
                   <div className="font-semibold text-[#252824]">{doc.title}</div>
                   <div className="text-[10px] text-[#6B716C]">
-                    Source: {doc.source} • Status: <StatusBadge status={doc.verificationStatus} />
+                    Source: {doc.source} • Status: <DocumentStatusBadge document={doc} />
                   </div>
                 </div>
                 <a

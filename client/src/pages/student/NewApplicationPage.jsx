@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate, useLocation, Link } from 'react-router-do
 import api from '../../services/api';
 import DashboardLayout from '../../components/DashboardLayout';
 import DigiLockerModal from '../../components/DigiLockerModal';
-import StatusBadge from '../../components/StatusBadge';
+import DocumentStatusBadge from '../../components/DocumentStatusBadge';
 import {
   FileText,
   ShieldCheck,
@@ -22,8 +22,8 @@ import {
 } from 'lucide-react';
 import {
   mapDigiLockerAcademicData,
-  detectPersonalConflicts,
-  mergePersonalDetails,
+  mapDigiLockerPersonalData,
+  mergeImportedDocuments,
   calculateAggregatePercentage,
   computeAcademicProgress,
 } from '../../services/documentMapper';
@@ -52,14 +52,10 @@ function ApplicationForm() {
 
   // DigiLocker Connection & Extraction State
   const [digiLockerConnected, setDigiLockerConnected] = useState(false);
-  const [importedCandidateName, setImportedCandidateName] = useState('');
   const [importNotice, setImportNotice] = useState(null);
 
   // Personal Conflict Resolution Modal State
-  const [conflictModalOpen, setConflictModalOpen] = useState(false);
   const [detectedConflicts, setDetectedConflicts] = useState([]);
-  const [pendingImportResult, setPendingImportResult] = useState(null);
-  const [conflictDecisions, setConflictDecisions] = useState({});
 
   const navigate = useNavigate();
 
@@ -181,7 +177,7 @@ function ApplicationForm() {
                   setDigiLockerConnected(true);
                   setImportNotice({
                     title: 'Academic information imported',
-                    subtitle: 'Complete the remaining required fields before continuing.',
+                    subtitle: 'Green outlines identify read-only DigiLocker fields.',
                   });
                 }
               }
@@ -263,7 +259,7 @@ function ApplicationForm() {
       class12: {
         ...prev.class12,
         subjects: updated,
-        percentage: autoPct > 0 ? autoPct : prev.class12.percentage,
+        percentage: prev.fieldMeta['class12.percentage'] !== 'imported' && autoPct > 0 ? autoPct : prev.class12.percentage,
       },
     }));
   };
@@ -286,83 +282,45 @@ function ApplicationForm() {
       class12: {
         ...prev.class12,
         subjects: updated,
-        percentage: autoPct > 0 ? autoPct : prev.class12.percentage,
+        percentage: prev.fieldMeta['class12.percentage'] !== 'imported' && autoPct > 0 ? autoPct : prev.class12.percentage,
       },
     }));
   };
 
-  // Handle DigiLocker Auto Fill & Conflict Detection
+  const isImported = (field) => academic.fieldMeta?.[field] === 'imported';
+  const importedProps = (field, lock = 'readOnly') => isImported(field)
+    ? { [lock]: true, 'data-digilocker': true, title: 'Imported from DigiLocker' }
+    : {};
+  const importedSubjects = isImported('class12.subjects') ||
+    academic.class12.subjects?.some((subject) => subject.source === 'imported');
+
   const handleDigiLockerImportSuccess = (result) => {
     const details = result.importedAcademicDetails;
     if (!details) return;
 
-    setDigiLockerConnected(true);
-    setImportedCandidateName(details.candidateName || '');
-
-    // Map academic details
     const mapped = mapDigiLockerAcademicData(details, academic);
+    const imported = mapDigiLockerPersonalData(personal, details);
+    setDigiLockerConnected(true);
+    setPersonal(imported.personal);
     setAcademic((prev) => ({
       ...prev,
       ...mapped.academic,
-      fieldMeta: { ...prev.fieldMeta, ...mapped.fieldMeta },
+      fieldMeta: { ...prev.fieldMeta, ...mapped.fieldMeta, ...imported.fieldMeta },
+      discrepancies: [...(prev.discrepancies || []), ...imported.conflicts.map((conflict) => ({
+        field: conflict.field,
+        enteredValue: String(conflict.currentValue),
+        importedValue: String(conflict.importedValue),
+        source: 'DigiLocker Demo',
+        resolved: true,
+      }))],
     }));
-
-    // Show import notice banner matching screenshot
+    setDetectedConflicts(imported.conflicts);
     setImportNotice({
-      title: 'Academic information imported',
-      subtitle: 'Complete the remaining required fields before continuing.',
+      title: 'Information imported from DigiLocker',
+      subtitle: 'Green outlines identify read-only DigiLocker fields.',
     });
 
-    // Check for conflicts in personal details
-    const conflicts = detectPersonalConflicts(personal, details);
-    if (conflicts.length > 0) {
-      setDetectedConflicts(conflicts);
-      setPendingImportResult(details);
-      // Initialize default decisions to keep imported
-      const initialDecisions = {};
-      conflicts.forEach((c) => {
-        initialDecisions[c.field] = 'imported';
-      });
-      setConflictDecisions(initialDecisions);
-      setConflictModalOpen(true);
-    } else {
-      // Safely merge personal details without overwriting existing entries
-      const merged = mergePersonalDetails(personal, details, {});
-      setPersonal(merged.personal);
-    }
-
-    // Refresh documents list
-    fetchDocuments().then((d) => {
-      if (d.success) setAttachedDocs(d.documents);
-    });
-  };
-
-  // Resolve Personal Details Conflicts Modal Action
-  const handleResolveConflicts = () => {
-    if (!pendingImportResult) {
-      setConflictModalOpen(false);
-      return;
-    }
-
-    const merged = mergePersonalDetails(personal, pendingImportResult, conflictDecisions);
-    setPersonal(merged.personal);
-
-    // Preserve the applicant's conflict resolution in the draft.
-    const loggedDiscrepancies = detectedConflicts.map((c) => ({
-      field: c.field,
-      enteredValue: String(c.currentValue),
-      importedValue: String(c.importedValue),
-      source: 'DigiLocker Demo',
-      resolved: conflictDecisions[c.field] !== 'keep',
-    }));
-
-    setAcademic((prev) => ({
-      ...prev,
-      discrepancies: [...(prev.discrepancies || []), ...loggedDiscrepancies],
-    }));
-
-    setConflictModalOpen(false);
-    setPendingImportResult(null);
+    setAttachedDocs((current) => mergeImportedDocuments(current, result.importedDocuments));
   };
 
   // Stage 1 Validation
@@ -776,6 +734,9 @@ function ApplicationForm() {
                 )}
               </div>
 
+              {digiLockerConnected && (
+                <p className="text-xs text-[#2B6E4E]">Green outlines identify read-only DigiLocker fields.</p>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-[#252824] mb-1">
@@ -786,6 +747,7 @@ function ApplicationForm() {
                     placeholder="e.g. Aarav Sharma"
                     value={personal.fullName}
                     onChange={(e) => setPersonal({ ...personal, fullName: e.target.value })}
+                    {...importedProps('personal.fullName')}
                     className={`w-full text-xs p-2 border rounded bg-[#F7F6F2] focus:outline-none focus:border-[#254D3C] ${
                       validationErrors.fullName ? 'border-[#9E2A2B]' : 'border-[#DDDCD5]'
                     }`}
@@ -803,6 +765,7 @@ function ApplicationForm() {
                     type="date"
                     value={personal.dob ? personal.dob.split('T')[0] : ''}
                     onChange={(e) => setPersonal({ ...personal, dob: e.target.value })}
+                    {...importedProps('personal.dob')}
                     className={`w-full text-xs p-2 border rounded bg-[#F7F6F2] focus:outline-none focus:border-[#254D3C] ${
                       validationErrors.dob ? 'border-[#9E2A2B]' : 'border-[#DDDCD5]'
                     }`}
@@ -819,6 +782,7 @@ function ApplicationForm() {
                   <select
                     value={personal.gender}
                     onChange={(e) => setPersonal({ ...personal, gender: e.target.value })}
+                    {...importedProps('personal.gender', 'disabled')}
                     className={`w-full text-xs p-2 border rounded bg-[#F7F6F2] focus:outline-none focus:border-[#254D3C] ${
                       validationErrors.gender ? 'border-[#9E2A2B]' : 'border-[#DDDCD5]'
                     }`}
@@ -841,6 +805,7 @@ function ApplicationForm() {
                   <select
                     value={personal.category}
                     onChange={(e) => setPersonal({ ...personal, category: e.target.value })}
+                    {...importedProps('personal.category', 'disabled')}
                     className={`w-full text-xs p-2 border rounded bg-[#F7F6F2] focus:outline-none focus:border-[#254D3C] ${
                       validationErrors.category ? 'border-[#9E2A2B]' : 'border-[#DDDCD5]'
                     }`}
@@ -865,6 +830,7 @@ function ApplicationForm() {
                     type="text"
                     value={personal.nationality}
                     onChange={(e) => setPersonal({ ...personal, nationality: e.target.value })}
+                    {...importedProps('personal.nationality')}
                     className={`w-full text-xs p-2 border rounded bg-[#F7F6F2] focus:outline-none focus:border-[#254D3C] ${
                       validationErrors.nationality ? 'border-[#9E2A2B]' : 'border-[#DDDCD5]'
                     }`}
@@ -1024,6 +990,7 @@ function ApplicationForm() {
                     placeholder="e.g. Rajesh Sharma"
                     value={personal.fatherName}
                     onChange={(e) => setPersonal({ ...personal, fatherName: e.target.value })}
+                    {...importedProps('personal.fatherName')}
                     className={`w-full text-xs p-2 border rounded bg-[#F7F6F2] focus:outline-none focus:border-[#254D3C] ${
                       validationErrors.fatherName ? 'border-[#9E2A2B]' : 'border-[#DDDCD5]'
                     }`}
@@ -1042,6 +1009,7 @@ function ApplicationForm() {
                     placeholder="e.g. Sunita Sharma"
                     value={personal.motherName}
                     onChange={(e) => setPersonal({ ...personal, motherName: e.target.value })}
+                    {...importedProps('personal.motherName')}
                     className={`w-full text-xs p-2 border rounded bg-[#F7F6F2] focus:outline-none focus:border-[#254D3C] ${
                       validationErrors.motherName ? 'border-[#9E2A2B]' : 'border-[#DDDCD5]'
                     }`}
@@ -1138,6 +1106,7 @@ function ApplicationForm() {
                       placeholder="e.g. Flat 402, Pine Grove Residency, Civil Lines"
                       value={personal.permanentAddress?.street || ''}
                       onChange={(e) => handlePermanentAddressChange('street', e.target.value)}
+                      {...importedProps('personal.permanentAddress.street')}
                       className={`w-full text-xs p-2 border rounded bg-[#F7F6F2] ${
                         validationErrors.permStreet ? 'border-[#9E2A2B]' : 'border-[#DDDCD5]'
                       }`}
@@ -1155,6 +1124,7 @@ function ApplicationForm() {
                       placeholder="e.g. New Delhi"
                       value={personal.permanentAddress?.city || ''}
                       onChange={(e) => handlePermanentAddressChange('city', e.target.value)}
+                      {...importedProps('personal.permanentAddress.city')}
                       className={`w-full text-xs p-2 border rounded bg-[#F7F6F2] ${
                         validationErrors.permCity ? 'border-[#9E2A2B]' : 'border-[#DDDCD5]'
                       }`}
@@ -1172,6 +1142,7 @@ function ApplicationForm() {
                       placeholder="e.g. North West Delhi"
                       value={personal.permanentAddress?.district || ''}
                       onChange={(e) => handlePermanentAddressChange('district', e.target.value)}
+                      {...importedProps('personal.permanentAddress.district')}
                       className={`w-full text-xs p-2 border rounded bg-[#F7F6F2] ${
                         validationErrors.permDistrict ? 'border-[#9E2A2B]' : 'border-[#DDDCD5]'
                       }`}
@@ -1189,6 +1160,7 @@ function ApplicationForm() {
                       placeholder="e.g. Delhi"
                       value={personal.permanentAddress?.state || ''}
                       onChange={(e) => handlePermanentAddressChange('state', e.target.value)}
+                      {...importedProps('personal.permanentAddress.state')}
                       className={`w-full text-xs p-2 border rounded bg-[#F7F6F2] ${
                         validationErrors.permState ? 'border-[#9E2A2B]' : 'border-[#DDDCD5]'
                       }`}
@@ -1207,6 +1179,7 @@ function ApplicationForm() {
                       placeholder="e.g. 110085"
                       value={personal.permanentAddress?.pincode || ''}
                       onChange={(e) => handlePermanentAddressChange('pincode', e.target.value)}
+                      {...importedProps('personal.permanentAddress.pincode')}
                       className={`w-full text-xs p-2 border rounded bg-[#F7F6F2] ${
                         validationErrors.permPincode ? 'border-[#9E2A2B]' : 'border-[#DDDCD5]'
                       }`}
@@ -1223,6 +1196,7 @@ function ApplicationForm() {
                       type="text"
                       value={personal.permanentAddress?.country || 'India'}
                       onChange={(e) => handlePermanentAddressChange('country', e.target.value)}
+                      {...importedProps('personal.permanentAddress.country')}
                       className="w-full text-xs p-2 border border-[#DDDCD5] rounded bg-[#F7F6F2]"
                     />
                   </div>
@@ -1413,6 +1387,7 @@ function ApplicationForm() {
                     type="text"
                     placeholder="e.g. CBSE"
                     value={academic.class10?.board || ''}
+                    {...importedProps('class10.board')}
                     onChange={(e) =>
                       setAcademic({
                         ...academic,
@@ -1440,6 +1415,7 @@ function ApplicationForm() {
                     type="text"
                     placeholder="e.g. CBSE2022091"
                     value={academic.class10?.rollNumber || ''}
+                    {...importedProps('class10.rollNumber')}
                     onChange={(e) =>
                       setAcademic({
                         ...academic,
@@ -1467,6 +1443,7 @@ function ApplicationForm() {
                     type="number"
                     placeholder="e.g. 2022"
                     value={academic.class10?.passingYear || ''}
+                    {...importedProps('class10.passingYear')}
                     onChange={(e) =>
                       setAcademic({
                         ...academic,
@@ -1494,6 +1471,7 @@ function ApplicationForm() {
                     type="text"
                     placeholder="e.g. 93%"
                     value={academic.class10?.percentage !== '' && academic.class10?.percentage !== undefined ? `${academic.class10.percentage}%` : ''}
+                    {...importedProps('class10.percentage')}
                     onChange={(e) => {
                       const cleanVal = e.target.value.replace('%', '').trim();
                       setAcademic({
@@ -1522,6 +1500,7 @@ function ApplicationForm() {
                     type="text"
                     placeholder="Enter your school name"
                     value={academic.class10?.schoolName || ''}
+                    {...importedProps('class10.schoolName')}
                     onChange={(e) =>
                       setAcademic({
                         ...academic,
@@ -1565,6 +1544,7 @@ function ApplicationForm() {
                     type="text"
                     placeholder="e.g. CBSE"
                     value={academic.class12?.board || ''}
+                    {...importedProps('class12.board')}
                     onChange={(e) =>
                       setAcademic({
                         ...academic,
@@ -1592,6 +1572,7 @@ function ApplicationForm() {
                     type="text"
                     placeholder="e.g. CBSE2024101"
                     value={academic.class12?.rollNumber || ''}
+                    {...importedProps('class12.rollNumber')}
                     onChange={(e) =>
                       setAcademic({
                         ...academic,
@@ -1619,6 +1600,7 @@ function ApplicationForm() {
                     type="number"
                     placeholder="e.g. 2024"
                     value={academic.class12?.passingYear || ''}
+                    {...importedProps('class12.passingYear')}
                     onChange={(e) =>
                       setAcademic({
                         ...academic,
@@ -1646,6 +1628,7 @@ function ApplicationForm() {
                     type="text"
                     placeholder="e.g. 92.4%"
                     value={academic.class12?.percentage !== '' && academic.class12?.percentage !== undefined ? `${academic.class12.percentage}%` : ''}
+                    {...importedProps('class12.percentage')}
                     onChange={(e) => {
                       const cleanVal = e.target.value.replace('%', '').trim();
                       setAcademic({
@@ -1673,13 +1656,15 @@ function ApplicationForm() {
                   <span className="text-xs font-medium text-[#4b5563]">
                     Subject-wise marks
                   </span>
-                  <button
-                    type="button"
-                    onClick={add12thSubject}
-                    className="text-[11px] font-semibold text-[#254D3C] hover:underline flex items-center"
-                  >
-                    <Plus className="w-3.5 h-3.5 mr-0.5" /> Add Subject
-                  </button>
+                  {!importedSubjects && (
+                    <button
+                      type="button"
+                      onClick={add12thSubject}
+                      className="text-[11px] font-semibold text-[#254D3C] hover:underline flex items-center"
+                    >
+                      <Plus className="w-3.5 h-3.5 mr-0.5" /> Add Subject
+                    </button>
+                  )}
                 </div>
 
                 {academic.class12?.subjects?.length > 0 ? (
@@ -1702,6 +1687,8 @@ function ApplicationForm() {
                                 placeholder="Subject Name (e.g. Mathematics)"
                                 value={sub.subjectName}
                                 onChange={(e) => handle12thSubjectChange(idx, 'subjectName', e.target.value)}
+                                readOnly={sub.source === 'imported'}
+                                data-digilocker={sub.source === 'imported' || undefined}
                                 className="w-full bg-transparent font-medium text-[#252824] focus:outline-none focus:border-b focus:border-[#254D3C]"
                               />
                             </td>
@@ -1712,6 +1699,8 @@ function ApplicationForm() {
                                   placeholder="Marks"
                                   value={sub.marksObtained}
                                   onChange={(e) => handle12thSubjectChange(idx, 'marksObtained', e.target.value)}
+                                  readOnly={sub.source === 'imported'}
+                                  data-digilocker={sub.source === 'imported' || undefined}
                                   className="w-14 bg-transparent font-medium text-[#252824] focus:outline-none focus:border-b focus:border-[#254D3C]"
                                 />
                                 <span className="text-[#6B716C]">/{sub.maxMarks || 100}</span>
@@ -1729,14 +1718,16 @@ function ApplicationForm() {
                               )}
                             </td>
                             <td className="py-2.5 px-3 text-right">
-                              <button
-                                type="button"
-                                onClick={() => remove12thSubject(idx)}
-                                className="text-gray-400 hover:text-[#9E2A2B] p-1"
-                                title="Remove Subject"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                              {sub.source !== 'imported' && (
+                                <button
+                                  type="button"
+                                  onClick={() => remove12thSubject(idx)}
+                                  className="text-gray-400 hover:text-[#9E2A2B] p-1"
+                                  title="Remove Subject"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                             </td>
                           </tr>
                         ))}
@@ -1759,6 +1750,7 @@ function ApplicationForm() {
                   type="text"
                   placeholder="Enter your school name"
                   value={academic.class12?.schoolName || ''}
+                  {...importedProps('class12.schoolName')}
                   onChange={(e) =>
                     setAcademic({
                       ...academic,
@@ -1891,7 +1883,7 @@ function ApplicationForm() {
                         <div className="text-[11px] text-[#6B716C] mt-1 space-x-2 flex items-center">
                           <span>Source: <strong>{attached.source}</strong></span>
                           <span>•</span>
-                          <span>Status: <StatusBadge status={attached.verificationStatus} /></span>
+                          <span>Status: <DocumentStatusBadge document={attached} /></span>
                         </div>
                       ) : (
                         <div className="text-[11px] text-[#6B716C] mt-1">
@@ -2136,9 +2128,9 @@ function ApplicationForm() {
         />
 
         {/* ========================================================================= */}
-        {/* Non-Destructive Personal Conflict Resolution Modal                         */}
+        {/* DigiLocker updates to existing form entries                              */}
         {/* ========================================================================= */}
-        {conflictModalOpen && (
+        {detectedConflicts.length > 0 && (
           <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
             <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full border border-[#DDDCD5] p-6 space-y-4">
               <div className="flex items-start space-x-3 border-b border-[#ECEBE4] pb-3">
@@ -2150,7 +2142,7 @@ function ApplicationForm() {
                     Discrepancy Detected Between Application and DigiLocker Record
                   </h3>
                   <p className="text-xs text-[#6B716C] mt-0.5">
-                    The imported documents contain personal demographic details that differ from what you previously entered. Choose which value to retain for your official admission record.
+                    These form entries were updated to match DigiLocker. Imported fields are read-only.
                   </p>
                 </div>
               </div>
@@ -2160,9 +2152,8 @@ function ApplicationForm() {
                   <thead className="bg-[#F7F6F2] text-[#6B716C] border-b border-[#ECEBE4]">
                     <tr>
                       <th className="py-2.5 px-3 font-semibold">Field</th>
-                      <th className="py-2.5 px-3 font-semibold">Current Form Entry</th>
+                      <th className="py-2.5 px-3 font-semibold">Previous Form Entry</th>
                       <th className="py-2.5 px-3 font-semibold">DigiLocker Record</th>
-                      <th className="py-2.5 px-3 font-semibold">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#ECEBE4]">
@@ -2171,21 +2162,6 @@ function ApplicationForm() {
                         <td className="py-2.5 px-3 font-medium text-[#252824]">{c.label}</td>
                         <td className="py-2.5 px-3 text-[#6B716C]">{c.currentValue || '(empty)'}</td>
                         <td className="py-2.5 px-3 text-[#254D3C] font-semibold">{c.importedValue}</td>
-                        <td className="py-2.5 px-3">
-                          <select
-                            value={conflictDecisions[c.field] || 'imported'}
-                            onChange={(e) =>
-                              setConflictDecisions({
-                                ...conflictDecisions,
-                                [c.field]: e.target.value,
-                              })
-                            }
-                            className="text-xs p-1 border border-[#DDDCD5] rounded bg-white"
-                          >
-                            <option value="imported">Use DigiLocker Value</option>
-                            <option value="keep">Keep My Entry</option>
-                          </select>
-                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -2202,10 +2178,10 @@ function ApplicationForm() {
               <div className="flex justify-end space-x-2 pt-3 border-t border-[#ECEBE4]">
                 <button
                   type="button"
-                  onClick={handleResolveConflicts}
+                  onClick={() => setDetectedConflicts([])}
                   className="px-5 py-2 bg-[#254D3C] text-white text-xs font-semibold rounded hover:bg-[#1c3b2e]"
                 >
-                  Apply Choices & Continue
+                  Continue
                 </button>
               </div>
             </div>

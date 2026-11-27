@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import api from '../../services/api';
 import DashboardLayout from '../../components/DashboardLayout';
 import DigiLockerModal from '../../components/DigiLockerModal';
-import StatusBadge from '../../components/StatusBadge';
+import DocumentStatusBadge from '../../components/DocumentStatusBadge';
+import { mergeImportedDocuments } from '../../services/documentMapper';
 import {
   FileText,
   Upload,
@@ -235,7 +236,7 @@ export default function DocumentLockerPage() {
                           </span>
                         </td>
                         <td className="py-3 px-4">
-                          <StatusBadge status={doc.verificationStatus} />
+                          <DocumentStatusBadge document={doc} />
                         </td>
                         <td className="py-3 px-4">
                           {ext ? (
@@ -281,7 +282,9 @@ export default function DocumentLockerPage() {
         <DigiLockerModal
           isOpen={isDigiLockerOpen}
           onClose={() => setIsDigiLockerOpen(false)}
-          onImportSuccess={fetchDocs}
+          onImportSuccess={({ importedDocuments }) => {
+            setDocuments((current) => mergeImportedDocuments(current, importedDocuments));
+          }}
         />
       </div>
     </DashboardLayout>

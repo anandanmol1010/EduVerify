@@ -5,154 +5,89 @@
  * and computes dynamic progress metrics.
  */
 
+const hasValue = (value) => value != null && String(value).trim() !== '';
+
+export const mergeImportedDocuments = (current, imported) => {
+  const importedIds = new Set(imported.map((document) => document._id));
+  return [...imported, ...current.filter((document) => !importedIds.has(document._id))];
+};
+
 export const mapDigiLockerAcademicData = (importedDetails, currentAcademic = {}) => {
-  if (!importedDetails) return { academic: currentAcademic, fieldMeta: {} };
+  const fieldMeta = { ...currentAcademic.fieldMeta };
+  const academic = {};
 
-  const fieldMeta = { ...(currentAcademic.fieldMeta || {}) };
-  const academic = {
-    class10: { ...(currentAcademic.class10 || {}) },
-    class12: { ...(currentAcademic.class12 || {}) },
-  };
-
-  // Map Class 10th details if present in import
-  if (importedDetails.class10) {
-    const c10 = importedDetails.class10;
-    academic.class10.board = importedDetails.board || c10.board || academic.class10.board || '';
-    academic.class10.rollNumber = c10.rollNumber || importedDetails.rollNumber || academic.class10.rollNumber || '';
-    academic.class10.passingYear = c10.passingYear || academic.class10.passingYear || '';
-    academic.class10.percentage = c10.percentage !== undefined ? c10.percentage : academic.class10.percentage || '';
-    academic.class10.schoolName = c10.schoolName || academic.class10.schoolName || '';
-    academic.class10.isImported = true;
-
-    fieldMeta['class10.board'] = 'imported';
-    fieldMeta['class10.rollNumber'] = 'imported';
-    fieldMeta['class10.passingYear'] = 'imported';
-    fieldMeta['class10.percentage'] = 'imported';
-    fieldMeta['class10.schoolName'] = c10.schoolName ? 'imported' : 'manual';
-
-    if (Array.isArray(c10.subjects) && c10.subjects.length > 0) {
-      academic.class10.subjects = c10.subjects.map((s) => ({
-        subjectName: s.subjectName || '',
-        marksObtained: s.marksObtained !== undefined ? s.marksObtained : 0,
-        maxMarks: s.maxMarks || 100,
-        grade: s.grade || '',
+  for (const level of ['class10', 'class12']) {
+    const record = importedDetails?.[level];
+    if (!record) continue;
+    const updated = { ...currentAcademic[level] };
+    for (const [field, value] of Object.entries({
+      board: record.board || importedDetails.board,
+      rollNumber: record.rollNumber || importedDetails.rollNumber,
+      passingYear: record.passingYear,
+      percentage: record.percentage,
+      schoolName: record.schoolName,
+      stream: record.stream,
+    })) {
+      if (hasValue(value)) {
+        updated[field] = value;
+        fieldMeta[`${level}.${field}`] = 'imported';
+      }
+    }
+    if (record.subjects?.length) {
+      updated.subjects = record.subjects.map((subject) => ({
+        subjectName: subject.subjectName || '',
+        marksObtained: subject.marksObtained ?? 0,
+        maxMarks: subject.maxMarks || 100,
+        grade: subject.grade || '',
         source: 'imported',
       }));
+      fieldMeta[`${level}.subjects`] = 'imported';
     }
+    academic[level] = updated;
   }
-
-  // Map Class 12th details if present in import
-  if (importedDetails.class12) {
-    const c12 = importedDetails.class12;
-    academic.class12.board = importedDetails.board || c12.board || academic.class12.board || '';
-    academic.class12.rollNumber = c12.rollNumber || importedDetails.rollNumber || academic.class12.rollNumber || '';
-    academic.class12.passingYear = c12.passingYear || academic.class12.passingYear || '';
-    academic.class12.percentage = c12.percentage !== undefined ? c12.percentage : academic.class12.percentage || '';
-    academic.class12.stream = c12.stream || academic.class12.stream || '';
-    academic.class12.schoolName = c12.schoolName || academic.class12.schoolName || '';
-    academic.class12.isImported = true;
-
-    fieldMeta['class12.board'] = 'imported';
-    fieldMeta['class12.rollNumber'] = 'imported';
-    fieldMeta['class12.passingYear'] = 'imported';
-    fieldMeta['class12.percentage'] = 'imported';
-    fieldMeta['class12.schoolName'] = c12.schoolName ? 'imported' : 'manual';
-
-    if (Array.isArray(c12.subjects) && c12.subjects.length > 0) {
-      academic.class12.subjects = c12.subjects.map((s) => ({
-        subjectName: s.subjectName || '',
-        marksObtained: s.marksObtained !== undefined ? s.marksObtained : 0,
-        maxMarks: s.maxMarks || 100,
-        grade: s.grade || '',
-        source: 'imported',
-      }));
-    }
-  }
-
   return { academic, fieldMeta };
 };
 
-/**
- * Identify conflicts between currently filled personal details and imported personal data
- */
-export const detectPersonalConflicts = (currentPersonal = {}, importedData = {}) => {
+const personalFields = [
+  ['fullName', 'Full legal name', 'candidateName'],
+  ['dob', 'Date of birth', 'dob'],
+  ['gender', 'Gender', 'gender'],
+  ['category', 'Category', 'category'],
+  ['nationality', 'Nationality', 'nationality'],
+  ['fatherName', "Father's name", 'fatherName'],
+  ['motherName', "Mother's name", 'motherName'],
+];
+
+const addressFields = [
+  ['street', 'Street'], ['city', 'City'], ['district', 'District'],
+  ['state', 'State'], ['pincode', 'PIN code'], ['country', 'Country'],
+];
+
+export const mapDigiLockerPersonalData = (current, details) => {
+  const personal = { ...current, permanentAddress: { ...current.permanentAddress } };
+  const fieldMeta = {};
   const conflicts = [];
-  if (!importedData) return conflicts;
 
-  const checkField = (fieldKey, label, currentVal, importedVal) => {
-    if (!importedVal) return;
-    const strCurrent = String(currentVal || '').trim().toLowerCase();
-    const strImported = String(importedVal || '').trim().toLowerCase();
-
-    // If current value is empty, it's not a conflict — it's an auto-fill opportunity
-    if (!strCurrent) return;
-
-    if (strCurrent !== strImported) {
-      conflicts.push({
-        field: fieldKey,
-        label,
-        currentValue: currentVal,
-        importedValue: importedVal,
-      });
+  const applyField = (target, field, label, value, fieldPath) => {
+    if (!hasValue(value)) return;
+    const currentValue = target[field];
+    if (hasValue(currentValue) && String(currentValue).trim().toLowerCase() !== String(value).trim().toLowerCase()) {
+      conflicts.push({ field: fieldPath, label, currentValue, importedValue: value });
     }
+    target[field] = value;
+    fieldMeta[fieldPath] = 'imported';
   };
 
-  checkField('fullName', 'Full Legal Name', currentPersonal.fullName, importedData.candidateName);
-  checkField('dob', 'Date of Birth', currentPersonal.dob ? currentPersonal.dob.split('T')[0] : '', importedData.dob ? importedData.dob.split('T')[0] : '');
-  checkField('gender', 'Gender', currentPersonal.gender, importedData.gender);
-  checkField('fatherName', "Father's Full Name", currentPersonal.fatherName, importedData.fatherName);
-  checkField('motherName', "Mother's Full Name", currentPersonal.motherName, importedData.motherName);
-  checkField('category', 'Category', currentPersonal.category, importedData.category);
-
-  return conflicts;
-};
-
-/**
- * Safely merge personal details, populating empty fields and tracking populated count
- */
-export const mergePersonalDetails = (currentPersonal = {}, importedData = {}, resolveDecisions = {}) => {
-  if (!importedData) return { personal: currentPersonal, newlyPopulated: [] };
-
-  const updated = { ...currentPersonal };
-  const newlyPopulated = [];
-
-  const mergeField = (key, importedVal) => {
-    if (!importedVal) return;
-    const decision = resolveDecisions[key];
-
-    if (decision === 'keep') {
-      return; // student explicitly kept current
-    }
-
-    if (decision === 'imported' || !updated[key]) {
-      updated[key] = importedVal;
-      newlyPopulated.push(key);
-    }
-  };
-
-  mergeField('fullName', importedData.candidateName);
-  if (importedData.dob) {
-    mergeField('dob', importedData.dob.split('T')[0]);
+  for (const [field, label, source] of personalFields) {
+    const value = field === 'dob' ? details[source]?.slice(0, 10) : details[source];
+    if (field === 'dob' && personal.dob) personal.dob = personal.dob.slice(0, 10);
+    applyField(personal, field, label, value, `personal.${field}`);
   }
-  mergeField('gender', importedData.gender);
-  mergeField('fatherName', importedData.fatherName);
-  mergeField('motherName', importedData.motherName);
-  mergeField('nationality', importedData.nationality || 'Indian');
-  mergeField('category', importedData.category);
-
-  // Address
-  if (importedData.permanentAddress && typeof importedData.permanentAddress === 'object') {
-    updated.permanentAddress = {
-      street: updated.permanentAddress?.street || importedData.permanentAddress.street || '',
-      city: updated.permanentAddress?.city || importedData.permanentAddress.city || '',
-      district: updated.permanentAddress?.district || importedData.permanentAddress.district || '',
-      state: updated.permanentAddress?.state || importedData.permanentAddress.state || '',
-      pincode: updated.permanentAddress?.pincode || importedData.permanentAddress.pincode || '',
-      country: updated.permanentAddress?.country || importedData.permanentAddress.country || 'India',
-    };
+  for (const [field, label] of addressFields) {
+    applyField(personal.permanentAddress, field, label, details.permanentAddress?.[field], `personal.permanentAddress.${field}`);
   }
-
-  return { personal: updated, newlyPopulated };
+  if (personal.isSameAddress) personal.correspondenceAddress = { ...personal.permanentAddress };
+  return { personal, fieldMeta, conflicts };
 };
 
 /**
