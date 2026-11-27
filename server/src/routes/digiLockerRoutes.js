@@ -6,6 +6,7 @@ import { MockStudentRecord } from '../models/MockStudentRecord.js';
 import { Application } from '../models/Application.js';
 import { protect } from '../middleware/auth.js';
 import { logAudit } from '../utils/auditLogger.js';
+import { validDocumentScope } from '../services/documentScope.js';
 
 const router = express.Router();
 
@@ -49,7 +50,10 @@ router.get('/demo-accounts', protect, async (req, res) => {
  */
 router.post('/oauth/init', protect, async (req, res) => {
   try {
-    const { applicationId } = req.body;
+    const { applicationId, workspaceId } = req.body;
+    if (!validDocumentScope({ applicationId, workspaceId })) {
+      return res.status(400).json({ success: false, message: 'Invalid application document scope.' });
+    }
 
     // Generate unique authorization session identifier
     const sessionId = `dlsess_${Date.now()}_${crypto.randomBytes(8).toString('hex')}`;
@@ -59,6 +63,7 @@ router.post('/oauth/init', protect, async (req, res) => {
       sessionId,
       student: req.user._id,
       applicationId: applicationId || null,
+      workspaceId: workspaceId || null,
       clientApp: 'EduVerify — Admission Process Automation System',
       purpose: 'Verification of academic certificates and examination marks for college admission',
       state: 'INITIATED',
@@ -643,7 +648,7 @@ router.post('/oauth/fetch-document', protect, async (req, res) => {
  */
 router.post('/oauth/exchange', protect, async (req, res) => {
   try {
-    const { sessionId, authCode, selectedDocTypes, applicationId } = req.body;
+    const { sessionId, authCode, selectedDocTypes, applicationId, workspaceId } = req.body;
 
     if (!sessionId || !authCode) {
       return res.status(400).json({ success: false, message: 'Session ID and Authorization Code are required.' });
@@ -687,7 +692,12 @@ router.post('/oauth/exchange', protect, async (req, res) => {
     }
 
     let application = null;
-    const targetAppId = applicationId || session.applicationId;
+    if (!validDocumentScope({ applicationId, workspaceId }) ||
+        (applicationId && applicationId !== String(session.applicationId)) ||
+        (workspaceId && workspaceId !== session.workspaceId)) {
+      return res.status(400).json({ success: false, message: 'Start DigiLocker again for this application.' });
+    }
+    const targetAppId = session.applicationId;
     if (targetAppId) {
       application = await Application.findOne({
         _id: targetAppId, student: req.user._id, status: { $in: ['Draft', 'Correction Required'] },
@@ -711,6 +721,7 @@ router.post('/oauth/exchange', protect, async (req, res) => {
     const result = await digiLockerService.importSelectedDocuments({
       user: req.user,
       application,
+      workspaceId: session.workspaceId,
       recordId: session.mockStudent,
       selectedDocTypes,
       consented: true,

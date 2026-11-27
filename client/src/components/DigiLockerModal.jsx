@@ -24,7 +24,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 
-export default function DigiLockerModal({ isOpen, onClose, onImportSuccess, applicationId }) {
+export default function DigiLockerModal({ isOpen, onClose, onImportSuccess, applicationId, workspaceId }) {
   // Navigation Screens:
   // 1 = Screen 1: Mobile Number Login (with +91 and demo suggestions)
   // 2 = Screen 2: Select Account (avatar, masked name, verified tag)
@@ -102,7 +102,7 @@ export default function DigiLockerModal({ isOpen, onClose, onImportSuccess, appl
     setLoading(true);
     setError('');
     try {
-      const res = await api.post('/digilocker/oauth/init', { applicationId });
+      const res = await api.post('/digilocker/oauth/init', { applicationId, workspaceId });
       if (res.success) {
         setSessionId(res.sessionId);
         setClientApp(res.clientApp || 'EduVerify — Admission Process Automation System');
@@ -362,6 +362,7 @@ export default function DigiLockerModal({ isOpen, onClose, onImportSuccess, appl
             authCode: consentRes.authCode,
             selectedDocTypes,
             applicationId,
+            workspaceId,
           });
 
           if (exchangeRes.success) {

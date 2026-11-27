@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useSearchParams, useNavigate, Link } from 'react-router-dom';
+import { useSearchParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import api from '../../services/api';
 import DashboardLayout from '../../components/DashboardLayout';
 import DigiLockerModal from '../../components/DigiLockerModal';
@@ -29,6 +29,11 @@ import {
 } from '../../services/documentMapper';
 
 export default function NewApplicationPage() {
+  const { key } = useLocation();
+  return <ApplicationForm key={key} />;
+}
+
+function ApplicationForm() {
   const [searchParams] = useSearchParams();
   const initialCourseId = searchParams.get('courseId') || '';
   const existingAppId = searchParams.get('appId') || '';
@@ -41,7 +46,9 @@ export default function NewApplicationPage() {
   const [validationErrors, setValidationErrors] = useState({});
   const [isDigiLockerOpen, setIsDigiLockerOpen] = useState(false);
   const [evaluation, setEvaluation] = useState(null);
-  const [currentAppId, setCurrentAppId] = useState(existingAppId);
+  const currentAppId = existingAppId || undefined;
+  const [workspaceId] = useState(() => crypto.randomUUID());
+  const documentParams = currentAppId ? { applicationId: currentAppId } : { workspaceId };
 
   // DigiLocker Connection & Extraction State
   const [digiLockerConnected, setDigiLockerConnected] = useState(false);
@@ -130,7 +137,7 @@ export default function NewApplicationPage() {
         const [courseRes, userRes, docRes] = await Promise.all([
           api.get('/courses'),
           api.get('/auth/me'),
-          api.get('/documents/my-documents', { params: { applicationId: existingAppId || undefined } }),
+          api.get('/documents/my-documents', { params: documentParams }),
         ]);
 
         let loadedCourses = [];
@@ -145,7 +152,6 @@ export default function NewApplicationPage() {
             const appRes = await api.get(`/applications/${existingAppId}`);
             if (appRes.success && appRes.application) {
               const draft = appRes.application;
-              setCurrentAppId(draft._id);
               if (draft.course) {
                 const matched = loadedCourses.find((c) => c._id === (draft.course._id || draft.course));
                 if (matched) setSelectedCourse(matched);
@@ -214,7 +220,7 @@ export default function NewApplicationPage() {
     init();
   }, [initialCourseId, existingAppId]);
 
-  const documentsUrl = currentAppId ? `/documents/my-documents?applicationId=${currentAppId}` : '/documents/my-documents';
+  const fetchDocuments = () => api.get('/documents/my-documents', { params: documentParams });
 
   // Handle Permanent Address Change with Auto-Sync to Correspondence if checked
   const handlePermanentAddressChange = (field, value) => {
@@ -326,7 +332,7 @@ export default function NewApplicationPage() {
     }
 
     // Refresh documents list
-    api.get(documentsUrl).then((d) => {
+    fetchDocuments().then((d) => {
       if (d.success) setAttachedDocs(d.documents);
     });
   };
@@ -453,7 +459,7 @@ export default function NewApplicationPage() {
       formData.append('file', file);
       formData.append('docType', docType);
       formData.append('title', docName);
-      if (currentAppId) formData.append('applicationId', currentAppId);
+      for (const [key, value] of Object.entries(documentParams)) formData.append(key, value);
       const marksheet = docType === 'class10_marksheet' ? academic.class10
         : docType === 'class12_marksheet' ? academic.class12 : null;
       if (marksheet) {
@@ -468,7 +474,7 @@ export default function NewApplicationPage() {
       });
 
       if (res.success) {
-        const dRes = await api.get(documentsUrl);
+        const dRes = await fetchDocuments();
         if (dRes.success) setAttachedDocs(dRes.documents);
         if (res.mismatches?.length) setError(res.mismatches.join(' '));
       }
@@ -484,7 +490,7 @@ export default function NewApplicationPage() {
     if (!window.confirm('Are you sure you want to remove this document?')) return;
     try {
       await api.delete(`/documents/${docId}`);
-      const dRes = await api.get(documentsUrl);
+      const dRes = await fetchDocuments();
       if (dRes.success) setAttachedDocs(dRes.documents);
     } catch (err) {
       alert(err.message || 'Failed to remove document');
@@ -518,11 +524,10 @@ export default function NewApplicationPage() {
     else fullChecklist.push(std);
   });
 
-  const checklistDocuments = fullChecklist.map(({ docType }) => {
-    const available = attachedDocs.filter((doc) => doc.docType === docType);
-    return available.find((doc) => currentAppId && doc.application === currentAppId)
-      || available.find((doc) => !doc.application);
-  }).filter(Boolean);
+  const checklistDocuments = fullChecklist.map(({ docType }) =>
+    attachedDocs.find((doc) => doc.docType === docType &&
+      (currentAppId ? doc.application === currentAppId : !doc.application && doc.workspaceId === workspaceId))
+  ).filter(Boolean);
   const mandatoryCount = fullChecklist.filter((doc) => doc.isMandatory).length;
   const submittedMandatoryCount = fullChecklist.filter(
     (doc) => doc.isMandatory && checklistDocuments.some((attached) => attached.docType === doc.docType)
@@ -546,7 +551,7 @@ export default function NewApplicationPage() {
         academic12th: academic.class12,
         academicOnly,
         personalSnapshot: personal,
-        applicationId: currentAppId || undefined,
+        ...documentParams,
         documentIds: checklistDocuments.map((doc) => doc._id),
       });
       if (academicOnly) {
@@ -582,6 +587,7 @@ export default function NewApplicationPage() {
         academicSnapshot: academic,
         documentIds: checklistDocuments.map((doc) => doc._id),
         isDraft,
+        workspaceId: currentAppId ? undefined : workspaceId,
       };
 
       if (currentAppId) {
@@ -2126,7 +2132,7 @@ export default function NewApplicationPage() {
           isOpen={isDigiLockerOpen}
           onClose={() => setIsDigiLockerOpen(false)}
           onImportSuccess={handleDigiLockerImportSuccess}
-          applicationId={currentAppId || undefined}
+          {...documentParams}
         />
 
         {/* ========================================================================= */}

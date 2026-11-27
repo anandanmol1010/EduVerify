@@ -9,6 +9,7 @@ import { User } from '../models/User.js';
 import { protect, authorize } from '../middleware/auth.js';
 import { evaluateEligibility } from '../services/eligibilityEngine.js';
 import { checkAdmissionReadiness } from '../services/admissionReadiness.js';
+import { documentScope, validDocumentScope } from '../services/documentScope.js';
 import { AdmissionError, approveAdmission, runAdmissionTransaction } from '../services/approveAdmission.js';
 import { logAudit } from '../utils/auditLogger.js';
 
@@ -25,14 +26,22 @@ const sendError = (res, error) => {
   });
 };
 
-const loadDocuments = async ({ student, appId, ids, session }) => {
+const loadDocuments = async ({ student, appId, workspaceId, ids, session }) => {
+  if (!validDocumentScope({ applicationId: appId, workspaceId })) {
+    throw new AdmissionError('Invalid application document scope.');
+  }
   if (ids !== undefined && (!Array.isArray(ids) || ids.some((id) => !mongoose.isValidObjectId(id)))) {
     throw new AdmissionError('Select valid application documents.');
   }
-  const filter = { student, application: appId ? { $in: [null, appId] } : null };
+  const filter = { student, ...documentScope({ applicationId: appId, workspaceId }) };
+  // Account locker entries require explicit selection by callers using the legacy API.
+  if (!appId && !workspaceId && !ids) return [];
   if (ids) filter._id = { $in: ids };
   const documents = await Document.find(filter).session(session ?? null);
-  if (ids && documents.length !== new Set(ids.map(String)).size) {
+  const otherApplications = documents.length && await Application.exists({
+    _id: { $ne: appId || null }, documents: { $in: documents.map((doc) => doc._id) },
+  }).session(session ?? null);
+  if (otherApplications || (ids && documents.length !== new Set(ids.map(String)).size)) {
     throw new AdmissionError('Some selected documents are unavailable for this application.');
   }
   return documents;
@@ -40,14 +49,14 @@ const loadDocuments = async ({ student, appId, ids, session }) => {
 
 router.post('/check-eligibility', protect, authorize('student'), async (req, res) => {
   try {
-    const { courseId, academic10th, academic12th, academicOnly, personalSnapshot, documentIds, applicationId } = req.body;
+    const { courseId, academic10th, academic12th, academicOnly, personalSnapshot, documentIds, applicationId, workspaceId } = req.body;
     const course = await Course.findById(courseId);
     if (!course) throw new AdmissionError('Course not found.', 404);
     const evaluation = academicOnly
       ? evaluateEligibility({ course, academic10th, academic12th })
       : await checkAdmissionReadiness({
         course, academic: { class10: academic10th, class12: academic12th }, personal: personalSnapshot,
-        documents: await loadDocuments({ student: req.user._id, appId: applicationId, ids: documentIds }),
+        documents: await loadDocuments({ student: req.user._id, appId: applicationId, workspaceId, ids: documentIds }),
       });
     return res.json({ success: true, evaluation, course });
   } catch (error) {
@@ -59,7 +68,7 @@ const saveStudentApplication = async (req, res) => {
   const appId = req.params.id;
   const submitting = appId ? req.body.submitNow === true : req.body.isDraft !== true;
   try {
-    const { courseId, personalSnapshot, academicSnapshot, documentIds } = req.body;
+    const { courseId, personalSnapshot, academicSnapshot, documentIds, workspaceId } = req.body;
     const { application, admissionLetter } = await runAdmissionTransaction(async (session, trackFile) => {
       const student = req.user._id;
       const current = appId ? await Application.findOne({ _id: appId, student }).session(session) : null;
@@ -80,7 +89,7 @@ const saveStudentApplication = async (req, res) => {
       if (personalSnapshot) application.personalSnapshot = personalSnapshot;
       if (academicSnapshot) application.academicSnapshot = academicSnapshot;
 
-      const documents = await loadDocuments({ student, appId, ids: documentIds ?? current?.documents, session });
+      const documents = await loadDocuments({ student, appId, workspaceId, ids: documentIds ?? current?.documents, session });
       const evaluation = await checkAdmissionReadiness({
         course, academic: application.academicSnapshot, personal: application.personalSnapshot, documents, session,
       });
@@ -93,7 +102,7 @@ const saveStudentApplication = async (req, res) => {
       application.eligibilityEvaluation = { ...evaluation, evaluatedAt: new Date() };
       await Document.updateMany(
         { _id: { $in: application.documents } },
-        { $set: { application: application._id }, $inc: { __v: 1 } }, { session }
+        { $set: { application: application._id, workspaceId: null }, $inc: { __v: 1 } }, { session }
       );
       if (current) {
         await Document.updateMany(
@@ -312,7 +321,7 @@ router.post('/:id/accept', protect, authorize('admin'), async (req, res) => {
       const course = await Course.findById(application.course).session(session);
       if (!course) throw new AdmissionError('Course not found.', 404);
       const documents = await loadDocuments({
-        student: application.student, appId: application._id, ids: application.documents, session,
+        student: application.student, appId: String(application._id), ids: application.documents, session,
       });
       const evaluation = evaluateEligibility({
         course, academic10th: application.academicSnapshot?.class10,

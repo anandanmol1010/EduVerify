@@ -199,5 +199,6 @@ const applicationSchema = new mongoose.Schema(
 applicationSchema.index({ student: 1, createdAt: -1 });
 applicationSchema.index({ student: 1, course: 1 });
 applicationSchema.index({ status: 1, createdAt: -1 });
+applicationSchema.index({ documents: 1 });
 
 export const Application = mongoose.model('Application', applicationSchema);

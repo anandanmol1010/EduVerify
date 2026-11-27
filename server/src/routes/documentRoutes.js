@@ -6,6 +6,7 @@ import { uploadDocument } from '../middleware/upload.js';
 import { protect, authorize } from '../middleware/auth.js';
 import { extractTextFromPdf, extractTextFromImage, parseExtractedAcademicData, detectDataMismatches } from '../services/ocrService.js';
 import { logAudit } from '../utils/auditLogger.js';
+import { documentScope, validDocumentScope } from '../services/documentScope.js';
 
 const router = express.Router();
 
@@ -16,7 +17,10 @@ router.post('/upload', protect, uploadDocument.single('file'), async (req, res) 
       return res.status(400).json({ success: false, message: 'Please select a document file to upload.' });
     }
 
-    const { docType, title, applicationId, rollNumber, candidateName, passingYear } = req.body;
+    const { docType, title, applicationId, workspaceId, rollNumber, candidateName, passingYear } = req.body;
+    if (!validDocumentScope({ applicationId, workspaceId })) {
+      return res.status(400).json({ success: false, message: 'Invalid application document scope.' });
+    }
     const application = applicationId ? await Application.findOne({
       _id: applicationId, student: req.user._id, status: { $in: ['Draft', 'Correction Required'] },
     }) : null;
@@ -55,21 +59,12 @@ router.post('/upload', protect, uploadDocument.single('file'), async (req, res) 
     });
 
     let doc;
-    // Check if replacing an existing document of same type for the application or student
-    let existingDoc = null;
-    if (applicationId) {
-      existingDoc = await Document.findOne({
-        application: applicationId,
-        student: req.user._id,
-        docType: docType || 'other',
-      });
-    } else {
-      existingDoc = await Document.findOne({
-        student: req.user._id,
-        application: null,
-        docType: docType || 'other',
-      });
-    }
+    const scope = documentScope({ applicationId, workspaceId });
+    const existingDoc = await Document.findOne({
+      student: req.user._id,
+      ...scope,
+      docType: docType || 'other',
+    }).sort({ createdAt: -1 });
 
     if (existingDoc) {
       existingDoc.title = title || req.file.originalname;
@@ -93,7 +88,7 @@ router.post('/upload', protect, uploadDocument.single('file'), async (req, res) 
     } else {
       doc = await Document.create({
         student: req.user._id,
-        application: applicationId || null,
+        ...scope,
         docType: docType || 'other',
         title: title || req.file.originalname,
         source: 'Manual Upload',
@@ -140,11 +135,12 @@ router.post('/upload', protect, uploadDocument.single('file'), async (req, res) 
 // Get user documents
 router.get('/my-documents', protect, async (req, res) => {
   try {
-    const { applicationId } = req.query;
-    const query = { student: req.user._id };
-    if (applicationId) {
-      query.$or = [{ application: applicationId }, { application: null }];
+    const { applicationId, workspaceId } = req.query;
+    if (!validDocumentScope({ applicationId, workspaceId })) {
+      return res.status(400).json({ success: false, message: 'Invalid application document scope.' });
     }
+    const query = { student: req.user._id, workspaceId: null };
+    if (applicationId || workspaceId) Object.assign(query, documentScope({ applicationId, workspaceId }));
     const documents = await Document.find(query).sort({ createdAt: -1 });
     return res.json({ success: true, count: documents.length, documents });
   } catch (error) {

@@ -1,6 +1,6 @@
 import { MockStudentRecord } from '../models/MockStudentRecord.js';
 import { Document } from '../models/Document.js';
-import { logAudit } from '../utils/auditLogger.js';
+import { documentScope } from './documentScope.js';
 
 class MockDigiLockerProvider {
   /**
@@ -35,13 +35,14 @@ class MockDigiLockerProvider {
   /**
    * Pull and attach documents to a user application
    */
-  async importSelectedDocuments({ user, application, recordId, selectedDocTypes, consented = false }) {
+  async importSelectedDocuments({ user, application, workspaceId, recordId, selectedDocTypes, consented = false }) {
     const record = await MockStudentRecord.findById(recordId);
     if (!record) {
       throw new Error('DigiLocker Demo Record not found');
     }
 
     const createdDocs = [];
+    const scope = documentScope({ applicationId: application?._id, workspaceId });
 
     for (const docMeta of record.availableDocuments) {
       if (selectedDocTypes && !selectedDocTypes.includes(docMeta.docType)) {
@@ -71,21 +72,9 @@ class MockDigiLockerProvider {
         extractedData,
       };
 
-      // Check if doc already imported/uploaded for this application
-      let existingDoc = null;
-      if (application) {
-        existingDoc = await Document.findOne({
-          application: application._id,
-          student: user._id,
-          docType: docMeta.docType,
-        });
-      } else {
-        existingDoc = await Document.findOne({
-          student: user._id,
-          application: null,
-          docType: docMeta.docType,
-        });
-      }
+      const existingDoc = await Document.findOne({
+        ...scope, student: user._id, docType: docMeta.docType,
+      }).sort({ createdAt: -1 });
 
       if (existingDoc) {
         existingDoc.set(metadata);
@@ -94,7 +83,7 @@ class MockDigiLockerProvider {
       } else {
         const newDoc = await Document.create({
           student: user._id,
-          application: application ? application._id : null,
+          ...scope,
           docType: docMeta.docType,
           ...metadata,
         });

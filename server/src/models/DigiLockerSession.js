@@ -18,6 +18,7 @@ const digiLockerSessionSchema = new mongoose.Schema(
       ref: 'Application',
       default: null,
     },
+    workspaceId: { type: String, default: null },
     clientApp: {
       type: String,
       default: 'EduVerify — Admission Process Automation System',

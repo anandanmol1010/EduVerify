@@ -12,6 +12,7 @@ const documentSchema = new mongoose.Schema(
       ref: 'Application',
       default: null,
     },
+    workspaceId: { type: String, default: null },
     docType: {
       type: String,
       required: true,
@@ -96,7 +97,7 @@ const documentSchema = new mongoose.Schema(
 );
 
 documentSchema.index({ student: 1, createdAt: -1 });
-documentSchema.index({ student: 1, application: 1, docType: 1 });
+documentSchema.index({ student: 1, application: 1, workspaceId: 1, docType: 1 });
 documentSchema.index({ application: 1, docType: 1 });
 
 export const Document = mongoose.model('Document', documentSchema);
