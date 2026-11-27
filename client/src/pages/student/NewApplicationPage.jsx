@@ -58,6 +58,7 @@ function ApplicationForm() {
   const [isDigiLockerOpen, setIsDigiLockerOpen] = useState(false);
   const [evaluation, setEvaluation] = useState(null);
   const [reviewedSnapshot, setReviewedSnapshot] = useState(null);
+  const [alreadyAccepted, setAlreadyAccepted] = useState(false);
   const currentAppId = existingAppId || undefined;
   const [workspaceId] = useState(() => crypto.randomUUID());
   const documentParams = currentAppId ? { applicationId: currentAppId } : { workspaceId };
@@ -142,11 +143,16 @@ function ApplicationForm() {
   useEffect(() => {
     const init = async () => {
       try {
-        const [courseRes, userRes, docRes] = await Promise.all([
+        const [courseRes, userRes, docRes, admissionStatus] = await Promise.all([
           api.get('/courses'),
           api.get('/auth/me'),
           api.get('/documents/my-documents', { params: documentParams }),
+          api.get('/applications/admission-status'),
         ]);
+        if (admissionStatus.accepted) {
+          setAlreadyAccepted(true);
+          return;
+        }
 
         let loadedCourses = [];
         if (courseRes.success) {
@@ -587,6 +593,17 @@ function ApplicationForm() {
   };
 
   const progress = computeAcademicProgress(academic, academic.fieldMeta || {});
+
+  if (alreadyAccepted) {
+    return (
+      <DashboardLayout roleTitle="STUDENT">
+        <div className="max-w-4xl mx-auto space-y-3">
+          <ApplicationBlockers reasons={['You got accepted in another course.']} />
+          <Link className="text-sm font-semibold text-[#254D3C] underline" to="/student/applications">View your applications</Link>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout roleTitle="STUDENT">
@@ -1832,7 +1849,7 @@ function ApplicationForm() {
                   Stage 3: Required Documents Checklist
                 </h2>
                 <p className="text-xs text-[#6B716C]">
-                  Import both marksheets through DigiLocker to verify subject marks. Manual uploads are checked for readable fields and mismatches.
+                  Use DigiLocker for automatic verification, or upload your documents for an admissions officer to review.
                 </p>
               </div>
               <button
@@ -2055,7 +2072,9 @@ function ApplicationForm() {
             )}
             {canSubmit && (
               <p className="p-3 rounded border border-emerald-200 bg-emerald-50 text-xs text-emerald-900">
-                Your marks and documents meet the requirements. Submitting will approve your admission and issue your letter.
+                {currentEvaluation.requiresManualReview
+                  ? 'Your application can be submitted. An admissions officer will verify your uploads and make the decision.'
+                  : 'Your marks and documents meet the requirements. Submitting will approve your admission and issue your letter.'}
               </p>
             )}
 

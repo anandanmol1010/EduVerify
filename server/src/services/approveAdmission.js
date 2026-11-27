@@ -5,6 +5,7 @@ import mongoose from 'mongoose';
 import { AdmissionLetter } from '../models/AdmissionLetter.js';
 import { Application } from '../models/Application.js';
 import { Course } from '../models/Course.js';
+import { User } from '../models/User.js';
 import { Notification } from '../models/Notification.js';
 import { generateAdmissionLetterPdf } from '../utils/admissionLetterGenerator.js';
 import { clientUrl, uploadsDirectory } from '../config/runtime.js';
@@ -16,6 +17,9 @@ export class AdmissionError extends Error {
     this.evaluation = evaluation;
   }
 }
+
+export const acceptedStatuses = ['Accepted', 'Approved', 'Admission Confirmed'];
+export const anotherCourseAccepted = 'You got accepted in another course.';
 
 export const runAdmissionTransaction = async (work) => {
   const session = await mongoose.startSession();
@@ -35,6 +39,12 @@ export const runAdmissionTransaction = async (work) => {
 };
 
 export const approveAdmission = async ({ application, course, actor, automatic, remarks, session, trackFile }) => {
+  await User.updateOne({ _id: application.student }, { $inc: { __v: 1 } }, { session });
+  if (await Application.exists({
+    student: application.student, _id: { $ne: application._id }, status: { $in: acceptedStatuses },
+  }).session(session)) {
+    throw new AdmissionError(anotherCourseAccepted, 409);
+  }
   const updatedCourse = await Course.findOneAndUpdate({
     _id: course._id,
     $expr: { $lt: ['$allocatedSeats', '$totalSeats'] },
@@ -57,6 +67,25 @@ export const approveAdmission = async ({ application, course, actor, automatic, 
     timestamp: now,
   });
   await application.save({ session });
+
+  const otherApplications = await Application.find({
+    student: application.student,
+    _id: { $ne: application._id },
+    status: { $nin: [...acceptedStatuses, 'Draft', 'Rejected'] },
+  }, '_id').session(session);
+  if (otherApplications.length) {
+    await Application.updateMany({ _id: { $in: otherApplications.map(({ _id }) => _id) } }, {
+      $set: { status: 'Rejected', rejectionReason: anotherCourseAccepted, decidedAt: now },
+      $push: { statusHistory: {
+        status: 'Rejected', changedBy: actor._id, changedByRole: 'system', remarks: anotherCourseAccepted, timestamp: now,
+      } },
+      $inc: { __v: 1 },
+    }, { session });
+    await Notification.insertMany(otherApplications.map(({ _id }) => ({
+      recipient: application.student, title: 'Application Rejected',
+      message: anotherCourseAccepted, type: 'info', relatedApplication: _id, link: `/student/applications/${_id}`,
+    })), { session });
+  }
 
   const admissionId = `SJ-${now.getFullYear()}-ADM-${randomBytes(8).toString('hex').toUpperCase()}`;
   const verificationToken = randomBytes(32).toString('hex');

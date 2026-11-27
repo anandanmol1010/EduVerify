@@ -112,6 +112,13 @@ export default function ApplicationDetailPage() {
           )}
         </div>
 
+        {app.status === 'Rejected' && app.rejectionReason && (
+          <div className="p-4 rounded border border-rose-200 bg-rose-50 text-xs text-rose-900">
+            <h2 className="font-bold">Application rejected</h2>
+            <p className="mt-1">{app.rejectionReason}</p>
+          </div>
+        )}
+
         {/* Correction Action Notice Banner if required */}
         {app.status === 'Correction Required' && (
           <div className="p-4 bg-orange-50 border border-orange-200 rounded text-xs space-y-2 text-orange-950">

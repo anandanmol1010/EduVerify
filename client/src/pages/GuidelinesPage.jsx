@@ -55,7 +55,7 @@ export default function GuidelinesPage() {
             If your marksheet or certificate is not available through the demo document locker, you can upload clear scanned copies or photos in PDF, JPG, or PNG format.
           </p>
           <p className="text-xs text-[#6B716C] leading-relaxed">
-            The upload check shows any readable details that differ from your application. Correct the form or replace the file before submitting. Uploaded marksheets need a DigiLocker import for automatic approval.
+            The upload check shows any readable details that differ from your application. Correct the form or replace the file before submitting. An admissions officer will verify manual uploads and make the decision.
           </p>
         </div>
 
@@ -69,7 +69,8 @@ export default function GuidelinesPage() {
           </p>
           <ul className="text-xs text-[#252824] space-y-1.5 list-disc list-inside">
             <li>Resolve any issues listed during review before submitting.</li>
-            <li>When you submit a verified application, the portal reserves an available seat, approves your admission, and issues your letter.</li>
+            <li>The portal can approve a verified DigiLocker application automatically. Applications with manual uploads go to an admissions officer.</li>
+            <li>Once you are accepted, the portal issues your letter and closes your other submitted applications.</li>
             <li>Your letter includes a scannable QR code that allows anyone to verify your admission status online without exposing your private marks.</li>
           </ul>
         </div>

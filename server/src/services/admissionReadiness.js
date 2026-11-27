@@ -3,6 +3,7 @@ import { AdmissionSetting } from '../models/AdmissionSetting.js';
 import { Application } from '../models/Application.js';
 import { evaluateEligibility } from './eligibilityEngine.js';
 import { detectDataMismatches } from './ocrService.js';
+import { acceptedStatuses, anotherCourseAccepted } from './approveAdmission.js';
 
 const normalize = (value) => String(value ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
 const dateOnly = (value) => value instanceof Date ? value.toISOString().slice(0, 10) : String(value ?? '').slice(0, 10);
@@ -50,6 +51,9 @@ const applicationBlockers = async ({ course, student, applicationId, session }) 
   if (course.allocatedSeats >= course.totalSeats) issues.push('This course has no available seats.');
 
   const otherApplications = { student, ...(applicationId ? { _id: { $ne: applicationId } } : {}) };
+  if (await Application.exists({ ...otherApplications, status: { $in: acceptedStatuses } }).session(session ?? null)) {
+    issues.push(anotherCourseAccepted);
+  }
   if (await Application.exists({ ...otherApplications, course: course._id, status: { $ne: 'Rejected' } }).session(session ?? null)) {
     issues.push('You already have an active application for this course.');
   }
@@ -67,12 +71,12 @@ const applicationBlockers = async ({ course, student, applicationId, session }) 
 };
 
 export const checkAdmissionReadiness = async ({
-  course, academic, personal, documents = [], student, applicationId, academicOnly = false, session,
+  course, academic, personal, documents = [], student, applicationId, academicOnly = false, reviewing = false, session,
 }) => {
   const eligibility = evaluateEligibility({
     course, academic10th: academic?.class10, academic12th: academic?.class12,
   });
-  const issues = new Set(await applicationBlockers({ course, student, applicationId, session }));
+  const issues = new Set(reviewing ? [] : await applicationBlockers({ course, student, applicationId, session }));
   if (academicOnly) {
     return { ...eligibility, blockers: [...issues], canContinue: eligibility.isEligible && issues.size === 0 };
   }
@@ -92,6 +96,7 @@ export const checkAdmissionReadiness = async ({
     _id: { $in: imported.map((doc) => doc.issuerRecord) },
   }).session(session ?? null) : [];
   const identities = new Set();
+  let requiresManualReview = false;
 
   for (const doc of documents) {
     const key = marksheets[doc.docType];
@@ -143,10 +148,9 @@ export const checkAdmissionReadiness = async ({
       percentage: entered?.percentage,
     });
     for (const mismatch of mismatches) issues.add(`${doc.title}: ${mismatch}`);
-    if (key) {
-      issues.add(`${doc.title}: import this marksheet from DigiLocker so its subject marks can be verified.`);
-    } else if (!mismatches.length && doc.verificationStatus !== 'Verified') {
-      issues.add(`${doc.title}: this upload needs verification. Import the issuer document from DigiLocker when available, or remove it if optional.`);
+    requiresManualReview = true;
+    if (reviewing && doc.verificationStatus !== 'Verified') {
+      issues.add(`${doc.title}: verify this upload before approving admission.`);
     }
   }
 
@@ -154,5 +158,5 @@ export const checkAdmissionReadiness = async ({
   for (const [type, title] of required) {
     if (!documents.some((doc) => doc.docType === type)) issues.add(`Missing required document: ${title}.`);
   }
-  return { ...eligibility, blockers: [...issues], canSubmit: eligibility.isEligible && issues.size === 0 };
+  return { ...eligibility, blockers: [...issues], requiresManualReview, canSubmit: eligibility.isEligible && issues.size === 0 };
 };

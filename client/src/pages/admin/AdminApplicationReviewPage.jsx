@@ -145,8 +145,7 @@ export default function AdminApplicationReviewPage() {
   );
 
   const unverifiedMandatoryDocs = docs.filter((d) => {
-    const isMandatory = reqDocConfigs.some((rd) => rd.docType === d.docType && rd.isMandatory);
-    return isMandatory && d.verificationStatus !== 'Verified';
+    return d.verificationStatus !== 'Verified';
   });
 
   const unresolvedDiscrepancies = docs.filter(

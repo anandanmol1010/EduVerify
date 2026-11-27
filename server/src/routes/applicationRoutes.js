@@ -7,10 +7,9 @@ import { Document } from '../models/Document.js';
 import { Notification } from '../models/Notification.js';
 import { User } from '../models/User.js';
 import { protect, authorize } from '../middleware/auth.js';
-import { evaluateEligibility } from '../services/eligibilityEngine.js';
 import { checkAdmissionReadiness } from '../services/admissionReadiness.js';
 import { documentScope, validDocumentScope } from '../services/documentScope.js';
-import { AdmissionError, approveAdmission, runAdmissionTransaction } from '../services/approveAdmission.js';
+import { acceptedStatuses, AdmissionError, anotherCourseAccepted, approveAdmission, runAdmissionTransaction } from '../services/approveAdmission.js';
 import { logAudit } from '../utils/auditLogger.js';
 
 const router = express.Router();
@@ -97,6 +96,9 @@ const saveStudentApplication = async (req, res) => {
         course, academic: application.academicSnapshot, personal: application.personalSnapshot, documents,
         student, applicationId: appId, session,
       });
+      if (!submitting && evaluation.blockers.includes(anotherCourseAccepted)) {
+        throw new AdmissionError(anotherCourseAccepted, 409, evaluation);
+      }
       if (submitting && !evaluation.canSubmit) {
         const problems = [...evaluation.rulesFailed, ...evaluation.blockers];
         throw new AdmissionError(problems.join(' '), 422, evaluation);
@@ -128,6 +130,20 @@ const saveStudentApplication = async (req, res) => {
         status: current?.status === 'Correction Required' ? 'Resubmitted' : 'Submitted',
         changedBy: student, changedByRole: 'student', remarks: 'Application passed submission validation.',
       });
+      if (evaluation.requiresManualReview) {
+        application.status = 'Pending Verification';
+        application.statusHistory.push({
+          status: 'Pending Verification', changedBy: student, changedByRole: 'system',
+          remarks: 'Manual uploads require an admissions officer to verify and approve the application.',
+        });
+        await application.save({ session });
+        await new Notification({
+          recipient: student, title: 'Application submitted for review',
+          message: 'An admissions officer will review your uploaded documents and application.',
+          type: 'info', relatedApplication: application._id, link: `/student/applications/${application._id}`,
+        }).save({ session });
+        return { application };
+      }
       const admissionLetter = await approveAdmission({
         application, course, actor: req.user, automatic: true, session, trackFile,
       });
@@ -136,7 +152,8 @@ const saveStudentApplication = async (req, res) => {
 
     await application.populate({ path: 'documents', options: { session: null } });
     await logAudit({
-      user: req.user, action: submitting ? 'ADMISSION_AUTO_APPROVED' : 'APPLICATION_DRAFTED',
+      user: req.user, action: admissionLetter ? 'ADMISSION_AUTO_APPROVED'
+        : submitting ? 'APPLICATION_SUBMITTED' : 'APPLICATION_DRAFTED',
       entityType: 'Application', entityId: application._id,
     });
     return res.status(appId ? 200 : 201).json({ success: true, application, admissionLetter });
@@ -146,6 +163,15 @@ const saveStudentApplication = async (req, res) => {
 };
 
 router.post('/', protect, authorize('student'), saveStudentApplication);
+
+router.get('/admission-status', protect, authorize('student'), async (req, res) => {
+  try {
+    const accepted = await Application.exists({ student: req.user._id, status: { $in: acceptedStatuses } });
+    return res.json({ accepted: Boolean(accepted) });
+  } catch (error) {
+    return sendError(res, error);
+  }
+});
 
 // Get student's applications
 router.get('/my-applications', protect, authorize('student'), async (req, res) => {
@@ -328,18 +354,11 @@ router.post('/:id/accept', protect, authorize('admin'), async (req, res) => {
       const documents = await loadDocuments({
         student: application.student, appId: String(application._id), ids: application.documents, session,
       });
-      const evaluation = evaluateEligibility({
-        course, academic10th: application.academicSnapshot?.class10,
-        academic12th: application.academicSnapshot?.class12, documents,
+      const evaluation = await checkAdmissionReadiness({
+        course, academic: application.academicSnapshot, personal: application.personalSnapshot,
+        student: application.student, applicationId: String(application._id), documents, session, reviewing: true,
       });
-      if (!evaluation.isEligible) throw new AdmissionError(evaluation.rulesFailed.join(' '));
-      const unverified = (course.eligibilityCriteria?.requiredDocuments || []).filter((required) =>
-        required.isMandatory && !documents.some((doc) => doc.docType === required.docType && doc.verificationStatus === 'Verified')
-      );
-      if (unverified.length) throw new AdmissionError(`Verify required documents first: ${unverified.map((doc) => doc.docName).join(', ')}.`);
-      if (documents.some((doc) => doc.extractedData?.isMismatched && doc.verificationStatus !== 'Verified')) {
-        throw new AdmissionError('Resolve document mismatches before approving this application.');
-      }
+      if (!evaluation.canSubmit) throw new AdmissionError([...evaluation.rulesFailed, ...evaluation.blockers].join(' '));
       await Document.updateMany({ _id: { $in: application.documents } }, { $inc: { __v: 1 } }, { session });
       application.eligibilityEvaluation = { ...evaluation, evaluatedAt: new Date() };
       const admissionLetter = await approveAdmission({
